@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -14,6 +14,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# clip_neutral.mp3 removed
 VOICE_CATALOG = {
     "anger": "clip_anger.mp3",
     "anxiety": "clip_anxiety.mp3",
@@ -21,7 +22,6 @@ VOICE_CATALOG = {
     "sadness": "clip_sadness.mp3",
     "happy": "clip_happy.mp3",
     "confused": "clip_confused.mp3",
-    "neutral": "clip_neutral.mp3",
     "crisis": "clip_crisis.mp3"
 }
 
@@ -145,8 +145,8 @@ def index():
     } else {
       rec = new SpeechRec();
       rec.lang = "ml-IN";
-      rec.continuous = true;       // Stays listening across pauses
-      rec.interimResults = true;    // Shows live feedback as you speak
+      rec.continuous = true;
+      rec.interimResults = true;
 
       rec.onstart = () => {
         isRecording = true;
@@ -175,7 +175,6 @@ def index():
       };
 
       rec.onend = () => {
-        // If Chrome stops prematurely while the user still wants to record, restart automatically
         if (isRecording) {
           try { rec.start(); } catch(err) {}
         }
@@ -201,15 +200,22 @@ def index():
           });
           const data = await res.json();
 
-          logs.innerHTML = 
+          let logText = 
             "<span class='label'>🗣️ Malayalam Transcription:</span>\\n\\"" + data.transcription + "\\"\\n\\n" +
-            "<span class='label'>🧠 Triggered Emotion:</span> " + data.label + "\\n" +
-            "<span class='label'>🔊 Playing Asset:</span> " + data.clip_name;
+            "<span class='label'>🧠 Triggered Emotion:</span> " + data.label;
 
+          if (data.stream_url) {
+            logText += "\\n<span class='label'>🔊 Playing Asset:</span> " + data.clip_name;
+            player.src = data.stream_url + "?t=" + Date.now();
+            player.style.display = "block";
+            player.play().catch(err => console.log("Play error:", err));
+          } else {
+            player.pause();
+            player.style.display = "none";
+          }
+
+          logs.innerHTML = logText;
           status.textContent = data.label;
-          player.src = data.stream_url + "?t=" + Date.now();
-          player.style.display = "block";
-          player.play().catch(err => console.log("Play error:", err));
         } catch (err) {
           logs.textContent = "Classification error: " + err.message;
         }
@@ -232,7 +238,7 @@ def index():
 async def get_audio(filename: str):
     path = os.path.join("voice_bank", filename)
     if not os.path.exists(path):
-        path = os.path.join("voice_bank", "clip_neutral.mp3")
+        raise HTTPException(status_code=404, detail="Audio file not found")
     return FileResponse(path, media_type="audio/mpeg")
 
 @app.post("/api/classify")
@@ -241,14 +247,14 @@ async def handle_classify(payload: TextPayload):
     print(f"\n[USER-CONTROLLED MALAYALAM INPUT]: '{text}'")
 
     matched_tag = classify_text(text)
-    clip = VOICE_CATALOG.get(matched_tag, "clip_neutral.mp3")
+    clip = VOICE_CATALOG.get(matched_tag, None)
     print(f"[DECISION]: Tag='{matched_tag}' -> Clip='{clip}'\n")
 
     return {
         "transcription": text,
         "label": LABEL_DETAILS.get(matched_tag, LABEL_DETAILS["neutral"]),
         "clip_name": clip,
-        "stream_url": f"/cdn/audio/{clip}"
+        "stream_url": f"/cdn/audio/{clip}" if clip else None
     }
 
 if __name__ == "__main__":
