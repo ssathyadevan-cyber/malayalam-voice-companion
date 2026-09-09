@@ -145,7 +145,7 @@ def index():
     .card { background: #0f172a; border: 1px solid #1e293b; border-radius: 28px; padding: 2.2rem 1.8rem; max-width: 440px; width: 100%; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7); }
     h2 { color: #38bdf8; margin: 0 0 8px 0; font-size: 22px; font-weight: 700; }
     .tag-badge { background: #0284c7; color: #f0f9ff; padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; display: inline-block; margin-bottom: 24px; }
-    .mic-btn { width: 96px; height: 96px; border-radius: 50%; background: #0284c7; color: white; border: none; font-size: 40px; cursor: pointer; margin: 15px auto; display: flex; align-items: center; justify-content: center; transition: transform 0.15s ease; box-shadow: 0 10px 25px rgba(2, 132, 199, 0.4); outline: none; -webkit-tap-highlight-color: transparent; }
+    .mic-btn { width: 96px; height: 96px; border-radius: 50%; background: #0284c7; color: white; border: none; font-size: 40px; cursor: pointer; margin: 20px auto; display: flex; align-items: center; justify-content: center; transition: transform 0.15s ease; box-shadow: 0 10px 25px rgba(2, 132, 199, 0.4); outline: none; -webkit-tap-highlight-color: transparent; }
     .mic-btn:active { transform: scale(0.94); }
     .mic-btn.recording { background: #ef4444; box-shadow: 0 0 30px rgba(239, 68, 68, 0.8); animation: pulse 1.4s infinite; }
     @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.08); } 100% { transform: scale(1); } }
@@ -154,24 +154,19 @@ def index():
     .label { color: #38bdf8; font-weight: 700; font-size: 12px; text-transform: uppercase; }
     .diag { color: #f87171; font-size: 12px; margin-top: 12px; line-height: 1.4; word-break: break-all; }
     audio { width: 100%; margin-top: 18px; border-radius: 8px; }
-    .start-banner { background: #1e293b; color: #38bdf8; padding: 10px; border-radius: 12px; font-size: 13px; margin-bottom: 15px; cursor: pointer; border: 1px dashed #38bdf8; }
   </style>
 </head>
 <body>
   <div class="card">
     <h2>De-Addiction Voice Companion</h2>
     <div class="tag-badge">AI RECOVERY SUPPORT</div>
-    
-    <div id="welcomeBanner" class="start-banner" onclick="triggerInitialWelcome()">
-      🔊 Tap to activate Audio & Welcome Note
-    </div>
 
     <div>
       <button id="micBtn" class="mic-btn">🎙️</button>
-      <div id="status">Tap mic to speak</div>
+      <div id="status">Ready</div>
     </div>
 
-    <div class="box" id="logs">ഹലോ! ഇന്ന് നിങ്ങളെ എങ്ങനെ സഹായിക്കാം? നിങ്ങളുടെ മനസ്സിലുള്ളത് എന്തും ഇവിടെ തുറന്നു സംസാരിക്കാം.</div>
+    <div class="box" id="logs">ഹലോ! ഇന്ന് നിങ്ങളെ എങ്ങനെ സഹായിക്കാം? നിങ്ങളുടെ മനസ്സിലുള്ളത് എന്തും ഇവിടെ തുറന്നു സംസാരിക്കാം. ഞങ്ങൾ കൂടെയുണ്ട്.</div>
     <div id="diag" class="diag"></div>
     <audio id="audioPlayer" controls style="display:none;"></audio>
   </div>
@@ -182,7 +177,6 @@ def index():
     const logs = document.getElementById("logs");
     const diag = document.getElementById("diag");
     const player = document.getElementById("audioPlayer");
-    const banner = document.getElementById("welcomeBanner");
 
     let initialWelcomePlayed = false;
     let isRecording = false;
@@ -191,21 +185,26 @@ def index():
     let processor = null;
     let pcmChunks = [];
 
-    function triggerInitialWelcome() {
+    // Attempt autoplay immediately on script evaluation
+    function tryPlayWelcome() {
       if (initialWelcomePlayed) return;
       player.src = "/cdn/audio/clip_welcome.mp3?t=" + Date.now();
       player.style.display = "block";
       player.play().then(() => {
         initialWelcomePlayed = true;
-        banner.style.display = "none";
-      }).catch(e => {
-        console.warn("Autoplay interaction required", e);
+      }).catch(err => {
+        // Autoplay blocked by browser policy; will play on first click
+        console.log("Autoplay waiting for first gesture:", err.message);
       });
     }
 
-    document.body.addEventListener("click", () => {
+    window.addEventListener("DOMContentLoaded", tryPlayWelcome);
+    window.addEventListener("load", tryPlayWelcome);
+
+    // If blocked, any first tap/click anywhere on page immediately triggers it
+    document.addEventListener("click", () => {
       if (!initialWelcomePlayed) {
-        triggerInitialWelcome();
+        tryPlayWelcome();
       }
     }, { once: true });
 
@@ -272,9 +271,10 @@ def index():
     }
 
     micBtn.onclick = async () => {
+      // If the welcome note has not yet played due to autoplay block, play it and don't record yet
       if (!initialWelcomePlayed) {
-        initialWelcomePlayed = true;
-        banner.style.display = "none";
+        tryPlayWelcome();
+        return;
       }
 
       player.load();
