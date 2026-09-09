@@ -1,10 +1,11 @@
 import os
+import json
 import requests
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="Voice Companion - Native WAV Engine")
+app = FastAPI(title="Voice Companion - Fast Malayalam Engine")
 
 app.add_middleware(
     CORSMiddleware,
@@ -15,7 +16,9 @@ app.add_middleware(
 )
 
 HF_API_TOKEN = os.environ.get("HF_API_TOKEN", "").strip()
-HF_ASR_URL = "https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3"
+
+# Switch to standard whisper endpoint configured with explicit Malayalam decoding
+HF_ASR_URL = "https://router.huggingface.co/hf-inference/models/openai/whisper-small"
 
 VOICE_CATALOG = {
     "anger": "clip_anger.mp3",
@@ -40,49 +43,14 @@ LABEL_DETAILS = {
 }
 
 DIRECT_MAP = {
-    "anger": [
-        "ദേഷ്യം", "ദേഷ്യ", "ദേഷ്യമാണ്", "ദേഷ്യപ്പെടുന്നു", "ദേഷ്യം വരുന്നു", "ദേഷ്യമായി",
-        "കോപം", "കോപ", "വെറുപ്പ്", "വെറുത്തു", "ചതി", "ചതിച്ചു", "സഹിക്കാൻ വയ്യ",
-        "കലിപ്പ്", "കലിപ്പാണ്", "കലിപ്പ് വരുന്നു", "ദേഷ്യമുണ്ട്", "angry", "mad", "hate"
-    ],
-    "anxiety": [
-        "പേടി", "പേടിയാണ്", "പേടിയാകുന്നു", "പേടിയാവുന്നു", "പേടിയുണ്ട്", "പേടിച്ചു",
-        "ടെൻഷൻ", "ടെൻഷനാണ്", "ടെന്ഷന്", "ടെൻഷൻ ആകുന്നു", "ഭയം", "ഭയമാണ്",
-        "പരിഭ്രാന്തി", "പരിഭ്രമം", "ശ്വാസം മുട്ടൽ", "ശ്വാസമെടുക്കാൻ പറ്റുന്നില്ല",
-        "നെഞ്ചിടിപ്പ്", "നെഞ്ച് ഇടിക്കുന്നു", "വിറയ്ക്കുന്നു", "panic", "fear", "scared"
-    ],
-    "loneliness": [
-        "ഒറ്റ", "ഒറ്റപ്പെടൽ", "ഒറ്റയ്ക്കാണ്", "ഒറ്റക്ക്", "ഒറ്റപ്പെട്ടു", "ഒറ്റയ്ക്കായി",
-        "ആരുമില്ല", "ആരും കൂടെയില്ല", "തനിച്ചാണ്", "തനിച്ചായി", "തനിയെ", "തനിച്ചു",
-        "മനസ്സ് തുറന്ന്", "മനസ്സു തുറന്ന്", "മനസ് തുറന്ന്", "സംസാരിക്കാൻ തോന്നുന്നു", "സംസാരിക്കാൻ ആരുമില്ല",
-        "കേൾക്കാൻ ആരുമില്ല", "കൂട്ടില്ല", "കൂട്ടിന് ആരുമില്ല", "lonely", "alone", "isolated"
-    ],
-    "sadness": [
-        "സങ്കടം", "സങ്കട", "സങ്കടമാണ്", "സങ്കടമുണ്ട്", "സങ്കടപ്പെടുന്നു", "സങ്കടമായി",
-        "വിഷമം", "വിഷമ", "വിഷമമാണ്", "വിഷമമുണ്ട്", "വിഷമമായി",
-        "കരച്ചിൽ", "കരയുന്നു", "കരഞ്ഞു", "കരയാൻ വരുന്നു", "കണ്ണീർ",
-        "വേദന", "വേദനിക്കുന്നു", "മനസ്സു തകർന്നു", "മനസ്സ് തകർന്നു", "ഹൃദയം തകർന്നു",
-        "തകർന്നുപോയി", "നിരാശ", "നിരാശയാണ്", "sad", "sadness", "cry", "crying", "grief"
-    ],
-    "happy": [
-        "സന്തോഷം", "സന്തോഷ", "സന്തോഷമാണ്", "സന്തോഷമുണ്ട്", "സന്തോഷമായി", "സന്തോഷപ്പെടുന്നു",
-        "ഹാപ്പി", "ഹാപ്പിയാണ്", "ചിരി", "നല്ല ദിവസം", "നല്ലൊരു ദിവസം", "അടിപൊളി",
-        "സൂപ്പർ", "ആഹ്ലാദം", "ഉത്സാഹം", "രസം", "നന്ദി", "സുഖം", "സുഖമാണ്",
-        "happy", "joy", "joyful", "glad", "great", "wonderful", "smile"
-    ],
-    "confused": [
-        "ആശയക്കുഴപ്പം", "ആശയക്കുഴപ്പമാണ്", "ആശയക്കുഴപ്പമുണ്ട്", "മനസ്സിലാകുന്നില്ല", "മനസിലാകുന്നില്ല",
-        "എന്ത് ചെയ്യണം", "എന്താ ചെയ്യേണ്ടത്", "എന്ത് ചെയ്യണമെന്ന് അറിയില്ല", "ഒരു എത്തും പിടിയും",
-        "തലപുകയുന്നു", "ഒന്നും തിരിയുന്നില്ല", "confused", "confusion", "lost"
-    ],
-    "crisis": [
-        "മരിക്കണം", "മരിക്കാൻ തോന്നുന്നു", "മരിച്ചാൽ മതി", "ജീവനൊടുക്കാൻ", "ജീവനൊടുക്കും",
-        "ജീവിതം അവസാനിപ്പിക്കാൻ", "ജീവിതം മടുത്തു", "ഇനി ജീവിക്കേണ്ട", "ആത്മഹത്യ", "suicide"
-    ],
-    "neutral": [
-        "നമസ്കാരം", "നമസ്തെ", "ഹലോ", "ഹായ്", "സുഖമാണോ", "വിശേഷങ്ങൾ",
-        "hello", "hi", "hey"
-    ]
+    "anger": ["ദേഷ്യം", "ദേഷ്യ", "ദേഷ്യമാണ്", "കോപം", "വെറുപ്പ്", "കലിപ്പ്", "angry", "mad"],
+    "anxiety": ["പേടി", "പേടിയാണ്", "ടെൻഷൻ", "ഭയം", "പരിഭ്രാന്തി", "panic", "fear"],
+    "loneliness": ["ഒറ്റ", "ഒറ്റപ്പെടൽ", "ഒറ്റയ്ക്കാണ്", "ആരുമില്ല", "തനിച്ചാണ്", "lonely", "alone"],
+    "sadness": ["സങ്കടം", "വിഷമം", "കരച്ചിൽ", "വേദന", "നിരാശ", "sad", "cry"],
+    "happy": ["സന്തോഷം", "ഹാപ്പി", "ചിരി", "അടിപൊളി", "സൂപ്പർ", "happy", "joy"],
+    "confused": ["ആശയക്കുഴപ്പം", "മനസ്സിലാകുന്നില്ല", "confused", "lost"],
+    "crisis": ["മരിക്കണം", "ജീവിതം മടുത്തു", "ആത്മഹത്യ", "suicide"],
+    "neutral": ["നമസ്കാരം", "ഹലോ", "ഹായ്", "hello", "hi"]
 }
 
 def classify_text(text: str) -> str:
@@ -97,7 +65,7 @@ def classify_text(text: str) -> str:
 def query_hf_asr(audio_bytes: bytes):
     token = os.environ.get("HF_API_TOKEN", "").strip()
     if not token:
-        return "", "Error: HF_API_TOKEN is missing in Render Environment settings."
+        return "", "Error: HF_API_TOKEN is missing in Render settings."
 
     headers = {
         "Authorization": f"Bearer {token}",
@@ -110,22 +78,21 @@ def query_hf_asr(audio_bytes: bytes):
             HF_ASR_URL,
             headers=headers,
             data=audio_bytes,
-            timeout=35
+            timeout=15
         )
+
         if response.status_code == 503:
-            res_json = response.json()
-            wait_time = int(res_json.get("estimated_time", 15))
-            return "", f"Model warming up (~{wait_time}s). Please tap mic and try again."
+            return "", "Model loading, please retry in 10s."
 
         if response.status_code != 200:
-            return "", f"HuggingFace error {response.status_code}: {response.text[:140]}"
+            return "", f"HF Status {response.status_code}: {response.text[:120]}"
 
         res_json = response.json()
         if isinstance(res_json, dict):
             return res_json.get("text", "").strip(), None
         elif isinstance(res_json, list) and len(res_json) > 0:
             return res_json[0].get("text", "").strip(), None
-        return "", "HuggingFace returned empty transcript."
+        return "", "No transcript returned."
     except Exception as e:
         return "", f"Request failed: {str(e)}"
 
@@ -157,14 +124,14 @@ def index():
 <body>
   <div class="card">
     <h2>Malayalam Companion</h2>
-    <div class="tag-badge">NATIVE WAV AUDIO ENGINE</div>
+    <div class="tag-badge">LOW-LATENCY MALAYALAM ASR</div>
     
     <div>
       <button id="micBtn" class="mic-btn">🎙️</button>
       <div id="status">Tap mic to speak</div>
     </div>
 
-    <div class="box" id="logs">Ready. Tap microphone, speak in Malayalam, and tap again when finished.</div>
+    <div class="box" id="logs">Ready. Speak clearly in Malayalam.</div>
     <div id="diag" class="diag"></div>
     <audio id="audioPlayer" controls style="display:none;"></audio>
   </div>
@@ -222,8 +189,7 @@ def index():
 
       processor.onaudioprocess = (e) => {
         if (!isRecording) return;
-        const channel = e.inputBuffer.getChannelData(0);
-        pcmChunks.push(new Float32Array(channel));
+        pcmChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
       };
 
       source.connect(processor);
@@ -254,15 +220,15 @@ def index():
           await startWavRecording();
           isRecording = true;
           micBtn.classList.add("recording");
-          status.textContent = "Recording... Tap again to finish";
-          logs.textContent = "സംസാരിക്കുക (Listening in Malayalam)...";
+          status.textContent = "Listening... Tap to finish";
+          logs.textContent = "സംസാരിക്കുക (Recording)...";
         } catch (e) {
           diag.textContent = "Mic error: " + e.message;
         }
       } else {
         isRecording = false;
         micBtn.classList.remove("recording");
-        status.textContent = "Transcribing Malayalam audio...";
+        status.textContent = "Transcribing...";
         logs.textContent = "Processing speech...";
 
         const wavBlob = await stopWavRecording();
