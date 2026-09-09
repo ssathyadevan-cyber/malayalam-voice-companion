@@ -14,7 +14,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# clip_neutral.mp3 removed
 VOICE_CATALOG = {
     "anger": "clip_anger.mp3",
     "anxiety": "clip_anxiety.mp3",
@@ -118,7 +117,7 @@ def index():
 <body>
   <div class="card">
     <h2>Malayalam Companion</h2>
-    <div class="tag-badge">USER CONTROLLED (CONTINUOUS)</div>
+    <div class="tag-badge">MOBILE-OPTIMIZED</div>
     
     <div>
       <button id="micBtn" class="mic-btn">🎙️</button>
@@ -138,10 +137,10 @@ def index():
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
     let rec = null;
     let isRecording = false;
-    let fullTranscript = "";
+    let sessionFinalTranscript = "";
 
     if (!SpeechRec) {
-      logs.textContent = "Your browser does not support native speech recognition. Please use Google Chrome.";
+      logs.textContent = "Speech recognition is not supported on this browser. On mobile, please open directly in Google Chrome.";
     } else {
       rec = new SpeechRec();
       rec.lang = "ml-IN";
@@ -149,46 +148,58 @@ def index():
       rec.interimResults = true;
 
       rec.onstart = () => {
-        isRecording = true;
-        fullTranscript = "";
         micBtn.classList.add("recording");
-        status.textContent = "Listening... Click mic again when done";
-        logs.textContent = "കേൾക്കുന്നു (Listening... speak at your own pace)...";
+        status.textContent = "Listening... Tap mic again when finished";
       };
 
       rec.onresult = (e) => {
-        let interim = "";
-        for (let i = e.resultIndex; i < e.results.length; ++i) {
+        let interimText = "";
+        let currentFinalText = "";
+
+        for (let i = 0; i < e.results.length; ++i) {
           if (e.results[i].isFinal) {
-            fullTranscript += " " + e.results[i][0].transcript;
+            currentFinalText += e.results[i][0].transcript + " ";
           } else {
-            interim += e.results[i][0].transcript;
+            interimText += e.results[i][0].transcript;
           }
         }
-        logs.textContent = (fullTranscript + " " + interim).trim();
+
+        if (currentFinalText.trim().length > 0) {
+          sessionFinalTranscript = currentFinalText.trim();
+        }
+
+        const displayText = (sessionFinalTranscript + " " + interimText).trim();
+        if (displayText) {
+          logs.textContent = displayText;
+        }
       };
 
       rec.onerror = (e) => {
         if (e.error !== "no-speech") {
-          status.textContent = "Mic error: " + e.error;
+          console.warn("Speech API error:", e.error);
         }
       };
 
       rec.onend = () => {
+        // Automatically restart if user hasn't explicitly stopped it, without wiping the transcript
         if (isRecording) {
-          try { rec.start(); } catch(err) {}
+          try {
+            rec.start();
+          } catch (err) {
+            // Already active or transition pending
+          }
         }
       };
 
       async function finishAndClassify() {
         isRecording = false;
-        rec.stop();
+        try { rec.stop(); } catch(e) {}
         micBtn.classList.remove("recording");
         status.textContent = "Analyzing speech...";
 
-        const finalText = fullTranscript.trim();
-        if (!finalText) {
-          status.textContent = "No speech detected. Try again.";
+        const finalText = (logs.textContent || sessionFinalTranscript).trim();
+        if (!finalText || finalText.startsWith("Ready.") || finalText.startsWith("Listening")) {
+          status.textContent = "No speech detected. Tap mic to retry.";
           return;
         }
 
@@ -208,7 +219,8 @@ def index():
             logText += "\\n<span class='label'>🔊 Playing Asset:</span> " + data.clip_name;
             player.src = data.stream_url + "?t=" + Date.now();
             player.style.display = "block";
-            player.play().catch(err => console.log("Play error:", err));
+            // Explicitly play on mobile click context
+            player.play().catch(err => console.log("Audio play error:", err));
           } else {
             player.pause();
             player.style.display = "none";
@@ -218,12 +230,20 @@ def index():
           status.textContent = data.label;
         } catch (err) {
           logs.textContent = "Classification error: " + err.message;
+          status.textContent = "Error occurred";
         }
       }
 
       micBtn.onclick = () => {
         if (!isRecording) {
-          rec.start();
+          sessionFinalTranscript = "";
+          logs.textContent = "കേൾക്കുന്നു (Listening...)...";
+          isRecording = true;
+          try {
+            rec.start();
+          } catch(e) {
+            console.warn("Start error:", e);
+          }
         } else {
           finishAndClassify();
         }
