@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="Malayalam Companion - Sarvam AI Pipeline")
+app = FastAPI(title="De-Addiction Voice Companion")
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,36 +24,41 @@ VOICE_CATALOG = {
     "loneliness": "clip_loneliness.mp3",
     "sadness": "clip_sadness.mp3",
     "happy": "clip_happy.mp3",
-    "confused": "clip_confused.mp3",
+    "craving": "clip_craving.mp3",
+    "stigma": "clip_stigma.mp3",
     "crisis": "clip_crisis.mp3",
     "neutral": "clip_happy.mp3"
 }
 
 LABEL_DETAILS = {
-    "anger": "🔥 ANGER (ദേഷ്യം)",
-    "anxiety": "⚠️ ANXIETY (പരിഭ്രാന്തി)",
-    "loneliness": "🫂 LONELINESS (ഒറ്റപ്പെടൽ / സംസാരിക്കാൻ ആഗ്രഹം)",
-    "sadness": "💧 SADNESS (സങ്കടം)",
-    "happy": "✨ HAPPINESS (സന്തോഷം)",
-    "confused": "🌀 CONFUSION (ആശയക്കുഴപ്പം)",
-    "neutral": "🌿 NEUTRAL (സാധാരണ സംഭാഷണം)",
-    "crisis": "🚨 CRISIS (ഗുരുതരം)"
+    "anger": "🔥 AGITATION / ANGER (ദേഷ്യം / അസ്വസ്ഥത)",
+    "anxiety": "⚠️ WITHDRAWAL / ANXIETY (വിറയൽ / പരിഭ്രാന്തി)",
+    "loneliness": "🫂 ISOLATION (ഏകാന്തത)",
+    "sadness": "💧 RELAPSE GUILT (സങ്കടം / കുറ്റബോധം)",
+    "happy": "✨ RECOVERY PROGRESS (സന്തോഷം / പുരോഗതി)",
+    "craving": "⚡ INTENSE CRAVING (തീവ്രമായ കൊതി / ആഗ്രഹം)",
+    "stigma": "🛡️ FEAR OF STIGMA / TREATMENT (ചികിത്സാ ഭയം / നാണക്കേട്)",
+    "crisis": "🚨 CRISIS INTERVENTION (അടിയന്തിര സഹായം)",
+    "neutral": "🌿 GENERAL SUPPORT (പൊതുവായ പിന്തുണ)"
 }
 
 EMOTION_KEYWORDS = {
-    "crisis": ["മരിക്കണം", "ജീവിതം മടുത്തു", "ആത്മഹത്യ", "suicide"],
+    "crisis": ["മരിക്കണം", "ജീവിതം മടുത്തു", "ആത്മഹത്യ", "suicide", "അവസാനിപ്പിക്കാൻ", "ജീവനൊടുക്കാൻ"],
+    "stigma": ["റീഹാബ്", "നാണക്കേട്", "പോലീസ് കേസ്", "ഡോക്ടറെ കാണാൻ", "മുദ്രകുത്തുമോ", "ജോലി പോകും", "സമൂഹം", "നാട്ടുകാർ"],
+    "craving": ["കൊതി", "ഉപയോഗിക്കാൻ തോന്നുന്നു", "ഇപ്പോൾ തന്നെ വേണം", "പിടിച്ചുനിൽക്കാൻ പറ്റുന്നില്ല", "കൈവിട്ടുപോകും", "craving", "urge"],
     "anxiety": [
-        "പേടി", "പേടിയാണ്", "പേടിപ്പിക്കുന്ന", "ഞെട്ടി", "ടെൻഷൻ", "ഭയം",
-        "പരിഭ്രാന്തി", "വിറയ്ക്കുന്നു", "ശ്വാസം", "ഉറങ്ങാൻ പറ്റിയില്ല", "സ്വപ്നം", "nightmare", "panic", "fear"
+        "വിറയ്ക്കുന്നു", "വിറയൽ", "സഹിക്കാൻ പറ്റുന്നില്ല", "പേടി", "പേടിയാണ്", "ടെൻഷൻ", 
+        "ഉറങ്ങാൻ പറ്റിയില്ല", "നെഞ്ചിടിപ്പ്", "ശ്വാസം മുട്ടൽ", "withdrawal", "panic"
     ],
     "sadness": [
-        "വിഷമം", "വിഷമമാണ്", "വിഷമവും", "സങ്കടം", "സങ്കടമാണ്", "കരച്ചിൽ",
-        "കരയുന്നു", "വേദന", "നിരാശ", "മനസ്സിന് സുഖമില്ല", "തകർന്നു", "sad", "grief"
+        "വീണുപോയി", "പഴയ ശീലം", "കുറ്റബോധം", "തോറ്റുപോയി", "തോൽപ്പിച്ചു", "വിഷമം", 
+        "സങ്കടം", "കരച്ചിൽ", "വേദന", "നിരാശ", "relapse", "sad"
     ],
-    "anger": ["ദേഷ്യം", "ദേഷ്യ", "ദേഷ്യമാണ്", "കോപം", "വെറുപ്പ്", "കലിപ്പ്", "angry", "mad"],
-    "loneliness": ["ഒറ്റ", "ഒറ്റപ്പെടൽ", "ഒറ്റയ്ക്കാണ്", "ആരുമില്ല", "തനിച്ചാണ്", "തനിയെ", "lonely", "alone"],
-    "happy": ["സന്തോഷം", "സന്തോഷ", "സന്തോഷമാണ്", "സന്തോഷമുണ്ട്", "ഹാപ്പി", "ചിരി", "നല്ല", "അടിപൊളി", "സൂപ്പർ", "happy", "joy"],
-    "confused": ["ആശയക്കുഴപ്പം", "മനസ്സിലാകുന്നില്ല", "മനസിലാകുന്നില്ല", "എന്ത് ചെയ്യണം", "confused", "lost"]
+    "loneliness": [
+        "ആരുമില്ല", "ഒറ്റപ്പെട്ടു", "ഒറ്റയ്ക്കാണ്", "ഏകാന്തത", "തനിച്ചാണ്", "തനിയെ", "കൂട്ടില്ല", "alone", "isolated"
+    ],
+    "anger": ["ദേഷ്യം", "വെറുപ്പ്", "ഉപദേശിക്കാൻ", "വെറുതെ വിട്ടേക്ക്", "കലിപ്പ്", "കോപം", "angry", "mad"],
+    "happy": ["തൊട്ടിട്ടില്ല", "മാറ്റം", "നല്ല ദിവസം", "സന്തോഷം", "ആശ്വാസം", "ജയിച്ചു", "അഭിമാനം", "happy", "clean"]
 }
 
 def fast_local_classify(text: str):
@@ -69,12 +74,8 @@ def query_sarvam_asr(audio_bytes: bytes):
     if not key:
         return "", "SARVAM_API_KEY missing in environment."
 
-    headers = {
-        "api-subscription-key": key
-    }
-    files = {
-        "file": ("input.wav", audio_bytes, "audio/wav")
-    }
+    headers = {"api-subscription-key": key}
+    files = {"file": ("input.wav", audio_bytes, "audio/wav")}
     data = {
         "model": "saaras:v3",
         "language_code": "ml-IN",
@@ -90,12 +91,10 @@ def query_sarvam_asr(audio_bytes: bytes):
         return "", f"ASR connection error: {str(e)}"
 
 def query_sarvam_chat_emotion(transcript: str) -> str:
-    # 1. Fast deterministic check first
     local_tag = fast_local_classify(transcript)
     if local_tag:
         return local_tag
 
-    # 2. Contextual LLM fallback using correct Sarvam model ID
     key = os.environ.get("SARVAM_API_KEY", "").strip()
     if not key or not transcript:
         return "neutral"
@@ -106,8 +105,9 @@ def query_sarvam_chat_emotion(transcript: str) -> str:
     }
 
     prompt = (
-        "Classify the emotion of this Malayalam statement into exactly one word from this list: "
-        "[anger, anxiety, loneliness, sadness, happy, confused, crisis, neutral].\n"
+        "You are an empathetic addiction recovery classifier. "
+        "Classify the user's emotional state from this Malayalam speech into EXACTLY one category: "
+        "[anger, anxiety, loneliness, sadness, happy, craving, stigma, crisis, neutral].\n"
         f"User text: \"{transcript}\"\n"
         "Return ONLY the single lowercased word."
     )
@@ -116,7 +116,7 @@ def query_sarvam_chat_emotion(transcript: str) -> str:
         "model": "sarvam-105b-conversations",
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.1,
-        "max_tokens": 10
+        "max_tokens": 8
     }
 
     try:
@@ -137,36 +137,41 @@ def index():
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Malayalam Companion</title>
+  <title>De-Addiction Voice Companion</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <style>
     * { box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #070d19; color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
-    .card { background: #0f172a; border: 1px solid #1e293b; border-radius: 28px; padding: 2.2rem 1.8rem; max-width: 420px; width: 100%; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7); }
-    h2 { color: #38bdf8; margin: 0 0 8px 0; font-size: 24px; font-weight: 700; }
-    .tag-badge { background: #4f46e5; color: #eef2ff; padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; display: inline-block; margin-bottom: 24px; }
-    .mic-btn { width: 96px; height: 96px; border-radius: 50%; background: #4f46e5; color: white; border: none; font-size: 40px; cursor: pointer; margin: 15px auto; display: flex; align-items: center; justify-content: center; transition: transform 0.15s ease; box-shadow: 0 10px 25px rgba(79, 70, 229, 0.4); outline: none; -webkit-tap-highlight-color: transparent; }
+    .card { background: #0f172a; border: 1px solid #1e293b; border-radius: 28px; padding: 2.2rem 1.8rem; max-width: 440px; width: 100%; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7); }
+    h2 { color: #38bdf8; margin: 0 0 8px 0; font-size: 22px; font-weight: 700; }
+    .tag-badge { background: #0284c7; color: #f0f9ff; padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; display: inline-block; margin-bottom: 24px; }
+    .mic-btn { width: 96px; height: 96px; border-radius: 50%; background: #0284c7; color: white; border: none; font-size: 40px; cursor: pointer; margin: 15px auto; display: flex; align-items: center; justify-content: center; transition: transform 0.15s ease; box-shadow: 0 10px 25px rgba(2, 132, 199, 0.4); outline: none; -webkit-tap-highlight-color: transparent; }
     .mic-btn:active { transform: scale(0.94); }
     .mic-btn.recording { background: #ef4444; box-shadow: 0 0 30px rgba(239, 68, 68, 0.8); animation: pulse 1.4s infinite; }
     @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.08); } 100% { transform: scale(1); } }
     #status { font-size: 15px; font-weight: 600; color: #94a3b8; margin-top: 10px; min-height: 22px; }
     .box { background: #030712; border-radius: 16px; padding: 16px; font-size: 14px; line-height: 1.6; text-align: left; margin-top: 24px; border: 1px solid #1e293b; min-height: 130px; white-space: pre-wrap; word-break: break-word; color: #e2e8f0; }
-    .label { color: #818cf8; font-weight: 700; font-size: 12px; text-transform: uppercase; }
+    .label { color: #38bdf8; font-weight: 700; font-size: 12px; text-transform: uppercase; }
     .diag { color: #f87171; font-size: 12px; margin-top: 12px; line-height: 1.4; word-break: break-all; }
     audio { width: 100%; margin-top: 18px; border-radius: 8px; }
+    .start-banner { background: #1e293b; color: #38bdf8; padding: 10px; border-radius: 12px; font-size: 13px; margin-bottom: 15px; cursor: pointer; border: 1px dashed #38bdf8; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h2>Malayalam Companion</h2>
-    <div class="tag-badge">SARVAM ASR + CHAT REASONING</div>
+    <h2>De-Addiction Voice Companion</h2>
+    <div class="tag-badge">AI RECOVERY SUPPORT</div>
     
+    <div id="welcomeBanner" class="start-banner" onclick="triggerInitialWelcome()">
+      🔊 Tap to activate Audio & Welcome Note
+    </div>
+
     <div>
       <button id="micBtn" class="mic-btn">🎙️</button>
       <div id="status">Tap mic to speak</div>
     </div>
 
-    <div class="box" id="logs">Ready. Tap microphone, speak naturally in Malayalam, and tap again when done.</div>
+    <div class="box" id="logs">ഹലോ! ഇന്ന് നിങ്ങളെ എങ്ങനെ സഹായിക്കാം? നിങ്ങളുടെ മനസ്സിലുള്ളത് എന്തും ഇവിടെ തുറന്നു സംസാരിക്കാം.</div>
     <div id="diag" class="diag"></div>
     <audio id="audioPlayer" controls style="display:none;"></audio>
   </div>
@@ -177,12 +182,32 @@ def index():
     const logs = document.getElementById("logs");
     const diag = document.getElementById("diag");
     const player = document.getElementById("audioPlayer");
+    const banner = document.getElementById("welcomeBanner");
 
+    let initialWelcomePlayed = false;
     let isRecording = false;
     let audioCtx = null;
     let micStream = null;
     let processor = null;
     let pcmChunks = [];
+
+    function triggerInitialWelcome() {
+      if (initialWelcomePlayed) return;
+      player.src = "/cdn/audio/clip_welcome.mp3?t=" + Date.now();
+      player.style.display = "block";
+      player.play().then(() => {
+        initialWelcomePlayed = true;
+        banner.style.display = "none";
+      }).catch(e => {
+        console.warn("Autoplay interaction required", e);
+      });
+    }
+
+    document.body.addEventListener("click", () => {
+      if (!initialWelcomePlayed) {
+        triggerInitialWelcome();
+      }
+    }, { once: true });
 
     function encodeWAV(samples, sampleRate) {
       const buffer = new ArrayBuffer(44 + samples.length * 2);
@@ -247,6 +272,11 @@ def index():
     }
 
     micBtn.onclick = async () => {
+      if (!initialWelcomePlayed) {
+        initialWelcomePlayed = true;
+        banner.style.display = "none";
+      }
+
       player.load();
       diag.textContent = "";
 
@@ -255,7 +285,7 @@ def index():
           await startWavRecording();
           isRecording = true;
           micBtn.classList.add("recording");
-          status.textContent = "Listening... Tap to stop";
+          status.textContent = "Listening... Tap to send";
           logs.textContent = "സംസാരിക്കുക (Speaking in Malayalam)...";
         } catch (e) {
           diag.textContent = "Mic access error: " + e.message;
@@ -263,8 +293,8 @@ def index():
       } else {
         isRecording = false;
         micBtn.classList.remove("recording");
-        status.textContent = "Analyzing with Sarvam AI...";
-        logs.textContent = "Transcribing and interpreting emotion...";
+        status.textContent = "Processing with Sarvam AI...";
+        logs.textContent = "Analyzing speech...";
 
         const wavBlob = await stopWavRecording();
         const formData = new FormData();
@@ -283,10 +313,10 @@ def index():
 
           let logHtml = 
             "<span class='label'>🗣️ Malayalam Transcription:</span>\\n\\"" + (data.transcription || "(none)") + "\\"\\n\\n" +
-            "<span class='label'>🧠 Detected Emotion:</span> " + data.label;
+            "<span class='label'>🧠 Evaluated State:</span> " + data.label;
 
           if (data.stream_url) {
-            logHtml += "\\n<span class='label'>🔊 Audio Response:</span> " + data.clip_name;
+            logHtml += "\\n<span class='label'>🔊 Support Response:</span> " + data.clip_name;
             player.src = data.stream_url + "?t=" + Date.now();
             player.style.display = "block";
             player.play().catch(e => console.warn(e));
@@ -322,7 +352,7 @@ async def process_audio(audio_file: UploadFile = File(...)):
     print(f"\n[SARVAM ASR]: '{transcription}' | Err: {error_msg}")
 
     matched_tag = query_sarvam_chat_emotion(transcription) if transcription else "neutral"
-    print(f"[FINAL CLASSIFICATION]: {matched_tag}")
+    print(f"[RECOVERY TAG]: {matched_tag}")
 
     clip = VOICE_CATALOG.get(matched_tag, "clip_happy.mp3")
 
