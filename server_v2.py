@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="Voice Companion - HuggingFace Audio Engine")
+app = FastAPI(title="Voice Companion - Native WAV Engine")
 
 app.add_middleware(
     CORSMiddleware,
@@ -15,7 +15,6 @@ app.add_middleware(
 )
 
 HF_API_TOKEN = os.environ.get("HF_API_TOKEN", "").strip()
-# Updated to Hugging Face's official Inference Router domain
 HF_ASR_URL = "https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3"
 
 VOICE_CATALOG = {
@@ -40,49 +39,14 @@ LABEL_DETAILS = {
 }
 
 DIRECT_MAP = {
-    "anger": [
-        "ദേഷ്യം", "ദേഷ്യ", "ദേഷ്യമാണ്", "ദേഷ്യപ്പെടുന്നു", "ദേഷ്യം വരുന്നു", "ദേഷ്യമായി",
-        "കോപം", "കോപ", "വെറുപ്പ്", "വെറുത്തു", "ചതി", "ചതിച്ചു", "സഹിക്കാൻ വയ്യ",
-        "കലിപ്പ്", "കലിപ്പാണ്", "കലിപ്പ് വരുന്നു", "ദേഷ്യമുണ്ട്", "angry", "mad", "hate"
-    ],
-    "anxiety": [
-        "പേടി", "പേടിയാണ്", "പേടിയാകുന്നു", "പേടിയാവുന്നു", "പേടിയുണ്ട്", "പേടിച്ചു",
-        "ടെൻഷൻ", "ടെൻഷനാണ്", "ടെന്ഷന്", "ടെൻഷൻ ആകുന്നു", "ഭയം", "ഭയമാണ്",
-        "പരിഭ്രാന്തി", "പരിഭ്രമം", "ശ്വാസം മുട്ടൽ", "ശ്വാസമെടുക്കാൻ പറ്റുന്നില്ല",
-        "നെഞ്ചിടിപ്പ്", "നെഞ്ച് ഇടിക്കുന്നു", "വിറയ്ക്കുന്നു", "panic", "fear", "scared"
-    ],
-    "loneliness": [
-        "ഒറ്റ", "ഒറ്റപ്പെടൽ", "ഒറ്റയ്ക്കാണ്", "ഒറ്റക്ക്", "ഒറ്റപ്പെട്ടു", "ഒറ്റയ്ക്കായി",
-        "ആരുമില്ല", "ആരും കൂടെയില്ല", "തനിച്ചാണ്", "തനിച്ചായി", "തനിയെ", "തനിച്ചു",
-        "മനസ്സ് തുറന്ന്", "മനസ്സു തുറന്ന്", "മനസ് തുറന്ന്", "സംസാരിക്കാൻ തോന്നുന്നു", "സംസാരിക്കാൻ ആരുമില്ല",
-        "കേൾക്കാൻ ആരുമില്ല", "കൂട്ടില്ല", "കൂട്ടിന് ആരുമില്ല", "lonely", "alone", "isolated"
-    ],
-    "sadness": [
-        "സങ്കടം", "സങ്കട", "സങ്കടമാണ്", "സങ്കടമുണ്ട്", "സങ്കടപ്പെടുന്നു", "സങ്കടമായി",
-        "വിഷമം", "വിഷമ", "വിഷമമാണ്", "വിഷമമുണ്ട്", "വിഷമമായി",
-        "കരച്ചിൽ", "കരയുന്നു", "കരഞ്ഞു", "കരയാൻ വരുന്നു", "കണ്ണീർ",
-        "വേദന", "വേദനിക്കുന്നു", "മനസ്സു തകർന്നു", "മനസ്സ് തകർന്നു", "ഹൃദയം തകർന്നു",
-        "തകർന്നുപോയി", "നിരാശ", "നിരാശയാണ്", "sad", "sadness", "cry", "crying", "grief"
-    ],
-    "happy": [
-        "സന്തോഷം", "സന്തോഷ", "സന്തോഷമാണ്", "സന്തോഷമുണ്ട്", "സന്തോഷമായി", "സന്തോഷപ്പെടുന്നു",
-        "ഹാപ്പി", "ഹാപ്പിയാണ്", "ചിരി", "നല്ല ദിവസം", "നല്ലൊരു ദിവസം", "അടിപൊളി",
-        "സൂപ്പർ", "ആഹ്ലാദം", "ഉത്സാഹം", "രസം", "നന്ദി", "സുഖം", "സുഖമാണ്",
-        "happy", "joy", "joyful", "glad", "great", "wonderful", "smile"
-    ],
-    "confused": [
-        "ആശയക്കുഴപ്പം", "ആശയക്കുഴപ്പമാണ്", "ആശയക്കുഴപ്പമുണ്ട്", "മനസ്സിലാകുന്നില്ല", "മനസിലാകുന്നില്ല",
-        "എന്ത് ചെയ്യണം", "എന്താ ചെയ്യേണ്ടത്", "എന്ത് ചെയ്യണമെന്ന് അറിയില്ല", "ഒരു എത്തും പിടിയും",
-        "തലപുകയുന്നു", "ഒന്നും തിരിയുന്നില്ല", "confused", "confusion", "lost"
-    ],
-    "crisis": [
-        "മരിക്കണം", "മരിക്കാൻ തോന്നുന്നു", "മരിച്ചാൽ മതി", "ജീവനൊടുക്കാൻ", "ജീവനൊടുക്കും",
-        "ജീവിതം അവസാനിപ്പിക്കാൻ", "ജീവിതം മടുത്തു", "ഇനി ജീവിക്കേണ്ട", "ആത്മഹത്യ", "suicide"
-    ],
-    "neutral": [
-        "നമസ്കാരം", "നമസ്തെ", "ഹലോ", "ഹായ്", "സുഖമാണോ", "വിശേഷങ്ങൾ",
-        "hello", "hi", "hey"
-    ]
+    "anger": ["ദേഷ്യം", "ദേഷ്യ", "ദേഷ്യമാണ്", "കോപം", "വെറുപ്പ്", "കലിപ്പ്", "angry", "mad"],
+    "anxiety": ["പേടി", "പേടിയാണ്", "ടെൻഷൻ", "ഭയം", "പരിഭ്രാന്തി", "panic", "fear"],
+    "loneliness": ["ഒറ്റ", "ഒറ്റപ്പെടൽ", "ഒറ്റയ്ക്കാണ്", "ആരുമില്ല", "തനിച്ചാണ്", "lonely", "alone"],
+    "sadness": ["സങ്കടം", "വിഷമം", "കരച്ചിൽ", "വേദന", "നിരാശ", "sad", "cry"],
+    "happy": ["സന്തോഷം", "ഹാപ്പി", "ചിരി", "അടിപൊളി", "സൂപ്പർ", "happy", "joy"],
+    "confused": ["ആശയക്കുഴപ്പം", "മനസ്സിലാകുന്നില്ല", "confused", "lost"],
+    "crisis": ["മരിക്കണം", "ജീവിതം മടുത്തു", "ആത്മഹത്യ", "suicide"],
+    "neutral": ["നമസ്കാരം", "ഹലോ", "ഹായ്", "hello", "hi"]
 }
 
 def classify_text(text: str) -> str:
@@ -94,15 +58,14 @@ def classify_text(text: str) -> str:
                 return emotion
     return "neutral"
 
-def query_hf_asr(audio_bytes: bytes, mime_type: str = "audio/webm"):
+def query_hf_asr(audio_bytes: bytes):
     token = os.environ.get("HF_API_TOKEN", "").strip()
     if not token:
-        print("[HF ASR Error]: HF_API_TOKEN is empty in environment variables.")
-        return ""
+        return "", "Error: HF_API_TOKEN is missing in Render Environment settings."
 
     headers = {
         "Authorization": f"Bearer {token}",
-        "Content-Type": mime_type
+        "Content-Type": "audio/wav"
     }
 
     try:
@@ -110,17 +73,24 @@ def query_hf_asr(audio_bytes: bytes, mime_type: str = "audio/webm"):
             HF_ASR_URL,
             headers=headers,
             data=audio_bytes,
-            timeout=30
+            timeout=35
         )
+        if response.status_code == 503:
+            res_json = response.json()
+            wait_time = int(res_json.get("estimated_time", 15))
+            return "", f"Model warming up (~{wait_time}s). Please tap mic and try again."
+
         if response.status_code != 200:
-            print(f"[HF ASR Error] Status {response.status_code}: {response.text[:200]}")
-            return ""
+            return "", f"HuggingFace error {response.status_code}: {response.text[:140]}"
 
         res_json = response.json()
-        return res_json.get("text", "").strip()
+        if isinstance(res_json, dict):
+            return res_json.get("text", "").strip(), None
+        elif isinstance(res_json, list) and len(res_json) > 0:
+            return res_json[0].get("text", "").strip(), None
+        return "", "HuggingFace returned empty transcript."
     except Exception as e:
-        print(f"[HF ASR Exception]: {e}")
-        return ""
+        return "", f"Request failed: {str(e)}"
 
 @app.get("/", response_class=HTMLResponse)
 def index():
@@ -142,21 +112,23 @@ def index():
     @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.08); } 100% { transform: scale(1); } }
     #status { font-size: 15px; font-weight: 600; color: #94a3b8; margin-top: 10px; min-height: 22px; }
     .box { background: #030712; border-radius: 16px; padding: 16px; font-size: 14px; line-height: 1.6; text-align: left; margin-top: 24px; border: 1px solid #1e293b; min-height: 130px; white-space: pre-wrap; word-break: break-word; color: #e2e8f0; }
-    .label { color: #38bdf8; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .label { color: #38bdf8; font-weight: 700; font-size: 12px; text-transform: uppercase; }
+    .diag { color: #f87171; font-size: 12px; margin-top: 12px; line-height: 1.4; word-break: break-all; }
     audio { width: 100%; margin-top: 18px; border-radius: 8px; }
   </style>
 </head>
 <body>
   <div class="card">
     <h2>Malayalam Companion</h2>
-    <div class="tag-badge">SERVER-ASR AUDIO PIPELINE</div>
+    <div class="tag-badge">NATIVE WAV AUDIO ENGINE</div>
     
     <div>
       <button id="micBtn" class="mic-btn">🎙️</button>
       <div id="status">Tap mic to speak</div>
     </div>
 
-    <div class="box" id="logs">Ready. Tap the microphone once to record, speak your Malayalam sentence, and tap again when finished.</div>
+    <div class="box" id="logs">Ready. Tap microphone, speak in Malayalam, and tap again when finished.</div>
+    <div id="diag" class="diag"></div>
     <audio id="audioPlayer" controls style="display:none;"></audio>
   </div>
 
@@ -164,103 +136,139 @@ def index():
     const micBtn = document.getElementById("micBtn");
     const status = document.getElementById("status");
     const logs = document.getElementById("logs");
+    const diag = document.getElementById("diag");
     const player = document.getElementById("audioPlayer");
 
-    let mediaRecorder = null;
-    let audioChunks = [];
     let isRecording = false;
+    let audioCtx = null;
+    let micStream = null;
+    let processor = null;
+    let pcmChunks = [];
 
-    async function setupRecorder() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        
-        let mime = "audio/webm";
-        if (!MediaRecorder.isTypeSupported("audio/webm")) {
-          if (MediaRecorder.isTypeSupported("audio/mp4")) {
-            mime = "audio/mp4";
-          } else {
-            mime = "";
-          }
-        }
-        
-        mediaRecorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    function encodeWAV(samples, sampleRate) {
+      const buffer = new ArrayBuffer(44 + samples.length * 2);
+      const view = new DataView(buffer);
 
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) audioChunks.push(event.data);
-        };
-
-        mediaRecorder.onstop = async () => {
-          micBtn.classList.remove("recording");
-          status.textContent = "Processing speech...";
-          logs.textContent = "Uploading audio to AI model for transcription...";
-
-          const chosenType = mediaRecorder.mimeType || "audio/webm";
-          const audioBlob = new Blob(audioChunks, { type: chosenType });
-          audioChunks = [];
-
-          const formData = new FormData();
-          formData.append("audio_file", audioBlob, "recording.webm");
-          formData.append("mime_type", chosenType);
-
-          try {
-            const res = await fetch("/api/process-audio", {
-              method: "POST",
-              body: formData
-            });
-
-            const data = await res.json();
-            if (!data.transcription) {
-              status.textContent = "Could not detect clear speech. Tap to retry.";
-              logs.textContent = "No Malayalam words recognized. Please speak clearly closer to the microphone.";
-              return;
-            }
-
-            let logHtml = 
-              "<span class='label'>🗣️ Malayalam Transcription:</span>\\n\\"" + data.transcription + "\\"\\n\\n" +
-              "<span class='label'>🧠 Triggered Emotion:</span> " + data.label;
-
-            if (data.stream_url) {
-              logHtml += "\\n<span class='label'>🔊 Audio Response:</span> " + data.clip_name;
-              player.src = data.stream_url + "?t=" + Date.now();
-              player.style.display = "block";
-              player.play().catch(err => console.warn(err));
-            } else {
-              player.pause();
-              player.style.display = "none";
-            }
-
-            logs.innerHTML = logHtml;
-            status.textContent = data.label;
-          } catch (err) {
-            logs.textContent = "Error processing audio: " + err.message;
-            status.textContent = "Server communication error";
-          }
-        };
-      } catch (err) {
-        status.textContent = "Microphone access denied";
-        logs.textContent = "Please grant microphone permissions to use voice interaction.";
+      function writeStr(offset, str) {
+        for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
       }
+
+      writeStr(0, "RIFF");
+      view.setUint32(4, 36 + samples.length * 2, true);
+      writeStr(8, "WAVE");
+      writeStr(12, "fmt ");
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * 2, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+      writeStr(36, "data");
+      view.setUint32(40, samples.length * 2, true);
+
+      let offset = 44;
+      for (let i = 0; i < samples.length; i++, offset += 2) {
+        let s = Math.max(-1, Math.min(1, samples[i]));
+        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      }
+      return new Blob([view], { type: "audio/wav" });
+    }
+
+    async function startWavRecording() {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 16000 } });
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      const source = audioCtx.createMediaStreamSource(micStream);
+      
+      processor = audioCtx.createScriptProcessor(4096, 1, 1);
+      pcmChunks = [];
+
+      processor.onaudioprocess = (e) => {
+        if (!isRecording) return;
+        const channel = e.inputBuffer.getChannelData(0);
+        pcmChunks.push(new Float32Array(channel));
+      };
+
+      source.connect(processor);
+      processor.connect(audioCtx.destination);
+    }
+
+    async function stopWavRecording() {
+      if (processor) processor.disconnect();
+      if (micStream) micStream.getTracks().forEach(t => t.stop());
+      if (audioCtx) await audioCtx.close();
+
+      let totalLen = pcmChunks.reduce((acc, c) => acc + c.length, 0);
+      let merged = new Float32Array(totalLen);
+      let offset = 0;
+      for (let c of pcmChunks) {
+        merged.set(c, offset);
+        offset += c.length;
+      }
+      return encodeWAV(merged, 16000);
     }
 
     micBtn.onclick = async () => {
       player.load();
-
-      if (!mediaRecorder) {
-        await setupRecorder();
-      }
-
-      if (!mediaRecorder) return;
+      diag.textContent = "";
 
       if (!isRecording) {
-        audioChunks = [];
-        mediaRecorder.start();
-        isRecording = true;
-        micBtn.classList.add("recording");
-        status.textContent = "Recording... Tap again to finish";
-        logs.textContent = "സംസാരിക്കുക (Speaking)...";
+        try {
+          await startWavRecording();
+          isRecording = true;
+          micBtn.classList.add("recording");
+          status.textContent = "Recording... Tap again to finish";
+          logs.textContent = "സംസാരിക്കുക (Listening in high-fidelity WAV)...";
+        } catch (e) {
+          diag.textContent = "Mic error: " + e.message;
+        }
       } else {
         isRecording = false;
-        mediaRecorder.stop();
+        micBtn.classList.remove("recording");
+        status.textContent = "Transcribing Malayalam audio...";
+        logs.textContent = "Sending WAV directly to Whisper AI...";
+
+        const wavBlob = await stopWavRecording();
+        const formData = new FormData();
+        formData.append("audio_file", wavBlob, "voice.wav");
+
+        try {
+          const res = await fetch("/api/process-audio", {
+            method: "POST",
+            body: formData
+          });
+          const data = await res.json();
+
+          if (data.error_msg) {
+            diag.textContent = data.error_msg;
+          }
+
+          if (!data.transcription) {
+            status.textContent = "No speech detected. Tap to retry.";
+            logs.textContent = "Audio received, but no Malayalam text was returned. Check diagnostic message below.";
+            return;
+          }
+
+          let logHtml = 
+            "<span class='label'>🗣️ Malayalam Transcription:</span>\\n\\"" + data.transcription + "\\"\\n\\n" +
+            "<span class='label'>🧠 Triggered Emotion:</span> " + data.label;
+
+          if (data.stream_url) {
+            logHtml += "\\n<span class='label'>🔊 Audio Response:</span> " + data.clip_name;
+            player.src = data.stream_url + "?t=" + Date.now();
+            player.style.display = "block";
+            player.play().catch(e => console.warn(e));
+          } else {
+            player.pause();
+            player.style.display = "none";
+          }
+
+          logs.innerHTML = logHtml;
+          status.textContent = data.label;
+        } catch (err) {
+          diag.textContent = "Upload failed: " + err.message;
+          status.textContent = "Server communication failed";
+        }
       }
     };
   </script>
@@ -276,23 +284,20 @@ async def get_audio(filename: str):
     return FileResponse(path, media_type="audio/mpeg")
 
 @app.post("/api/process-audio")
-async def process_audio(
-    audio_file: UploadFile = File(...),
-    mime_type: str = "audio/webm"
-):
+async def process_audio(audio_file: UploadFile = File(...)):
     audio_bytes = await audio_file.read()
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="Empty audio payload")
 
-    transcription = query_hf_asr(audio_bytes, mime_type=mime_type)
-    print(f"\n[ASR TRANSCRIPT]: '{transcription}'")
+    transcription, error_msg = query_hf_asr(audio_bytes)
+    print(f"\n[ASR RESULT]: '{transcription}' | Err: {error_msg}")
 
     matched_tag = classify_text(transcription) if transcription else "neutral"
     clip = VOICE_CATALOG.get(matched_tag, None)
-    print(f"[DECISION]: Emotion='{matched_tag}' -> Clip='{clip}'\n")
 
     return {
         "transcription": transcription,
+        "error_msg": error_msg,
         "label": LABEL_DETAILS.get(matched_tag, LABEL_DETAILS["neutral"]),
         "clip_name": clip,
         "stream_url": f"/cdn/audio/{clip}" if clip else None
