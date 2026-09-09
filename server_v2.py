@@ -117,14 +117,14 @@ def index():
 <body>
   <div class="card">
     <h2>Malayalam Companion</h2>
-    <div class="tag-badge">MOBILE-OPTIMIZED</div>
+    <div class="tag-badge">MOBILE-CLEAN V3</div>
     
     <div>
       <button id="micBtn" class="mic-btn">🎙️</button>
-      <div id="status" style="font-size: 14px; font-weight: 600; color: #cbd5e1;">Click mic to start speaking</div>
+      <div id="status" style="font-size: 14px; font-weight: 600; color: #cbd5e1;">Tap mic and speak</div>
     </div>
 
-    <div class="box" id="logs">Ready. Tap microphone to start, tap again to finish.</div>
+    <div class="box" id="logs">Ready. Tap microphone, speak in Malayalam, and it will process automatically.</div>
     <audio id="audioPlayer" controls style="display:none;"></audio>
   </div>
 
@@ -137,72 +137,54 @@ def index():
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
     let rec = null;
     let isRecording = false;
-    let sessionFinalTranscript = "";
 
     if (!SpeechRec) {
-      logs.textContent = "Speech recognition is not supported on this browser. On mobile, please open directly in Google Chrome.";
+      logs.textContent = "Speech recognition is not supported on this browser. On mobile, please open directly inside Chrome.";
     } else {
       rec = new SpeechRec();
       rec.lang = "ml-IN";
-      rec.continuous = true;
-      rec.interimResults = true;
+      // Single-utterance mode prevents Android duplications and buffering bugs
+      rec.continuous = false;
+      rec.interimResults = false;
 
       rec.onstart = () => {
+        isRecording = true;
         micBtn.classList.add("recording");
-        status.textContent = "Listening... Tap mic again when finished";
+        status.textContent = "Listening... Speak now";
+        logs.textContent = "കേൾക്കുന്നു (Listening)...";
       };
 
-      rec.onresult = (e) => {
-        let interimText = "";
-        let currentFinalText = "";
-
+      rec.onresult = async (e) => {
+        let transcript = "";
         for (let i = 0; i < e.results.length; ++i) {
-          if (e.results[i].isFinal) {
-            currentFinalText += e.results[i][0].transcript + " ";
-          } else {
-            interimText += e.results[i][0].transcript;
-          }
+          transcript += e.results[i][0].transcript;
         }
+        transcript = transcript.trim();
+        if (!transcript) return;
 
-        if (currentFinalText.trim().length > 0) {
-          sessionFinalTranscript = currentFinalText.trim();
-        }
-
-        const displayText = (sessionFinalTranscript + " " + interimText).trim();
-        if (displayText) {
-          logs.textContent = displayText;
-        }
+        logs.textContent = "You said: " + transcript + "\\nAnalyzing...";
+        status.textContent = "Processing...";
+        await sendToBackend(transcript);
       };
 
       rec.onerror = (e) => {
+        console.warn("Speech API error:", e.error);
         if (e.error !== "no-speech") {
-          console.warn("Speech API error:", e.error);
+          status.textContent = "Error: " + e.error;
+        } else {
+          status.textContent = "No speech heard. Tap to retry.";
         }
       };
 
       rec.onend = () => {
-        // Automatically restart if user hasn't explicitly stopped it, without wiping the transcript
-        if (isRecording) {
-          try {
-            rec.start();
-          } catch (err) {
-            // Already active or transition pending
-          }
+        isRecording = false;
+        micBtn.classList.remove("recording");
+        if (status.textContent.startsWith("Listening")) {
+          status.textContent = "Tap mic and speak";
         }
       };
 
-      async function finishAndClassify() {
-        isRecording = false;
-        try { rec.stop(); } catch(e) {}
-        micBtn.classList.remove("recording");
-        status.textContent = "Analyzing speech...";
-
-        const finalText = (logs.textContent || sessionFinalTranscript).trim();
-        if (!finalText || finalText.startsWith("Ready.") || finalText.startsWith("Listening")) {
-          status.textContent = "No speech detected. Tap mic to retry.";
-          return;
-        }
-
+      async function sendToBackend(finalText) {
         try {
           const res = await fetch("/api/classify", {
             method: "POST",
@@ -219,7 +201,6 @@ def index():
             logText += "\\n<span class='label'>🔊 Playing Asset:</span> " + data.clip_name;
             player.src = data.stream_url + "?t=" + Date.now();
             player.style.display = "block";
-            // Explicitly play on mobile click context
             player.play().catch(err => console.log("Audio play error:", err));
           } else {
             player.pause();
@@ -235,17 +216,17 @@ def index():
       }
 
       micBtn.onclick = () => {
+        // Prepare audio element on user gesture to avoid mobile autoplay blocking
+        player.load();
+
         if (!isRecording) {
-          sessionFinalTranscript = "";
-          logs.textContent = "കേൾക്കുന്നു (Listening...)...";
-          isRecording = true;
           try {
             rec.start();
           } catch(e) {
             console.warn("Start error:", e);
           }
         } else {
-          finishAndClassify();
+          rec.stop();
         }
       };
     }
@@ -264,7 +245,7 @@ async def get_audio(filename: str):
 @app.post("/api/classify")
 async def handle_classify(payload: TextPayload):
     text = payload.text.strip()
-    print(f"\n[USER-CONTROLLED MALAYALAM INPUT]: '{text}'")
+    print(f"\n[MALAYALAM INPUT]: '{text}'")
 
     matched_tag = classify_text(text)
     clip = VOICE_CATALOG.get(matched_tag, None)
