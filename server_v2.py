@@ -24,7 +24,8 @@ VOICE_CATALOG = {
     "sadness": "clip_sadness.mp3",
     "happy": "clip_happy.mp3",
     "confused": "clip_confused.mp3",
-    "crisis": "clip_crisis.mp3"
+    "crisis": "clip_crisis.mp3",
+    "neutral": "clip_happy.mp3"  # Fallback response for general speech
 }
 
 LABEL_DETAILS = {
@@ -65,13 +66,21 @@ def query_hf_asr(audio_bytes: bytes):
 
     headers = {
         "Authorization": f"Bearer {token}",
-        "Content-Type": "audio/wav"
+        "Content-Type": "audio/wav",
+        "x-wait-for-model": "true"
+    }
+
+    # Pass language parameters to enforce Malayalam decoding
+    params = {
+        "language": "ml",
+        "task": "transcribe"
     }
 
     try:
         response = requests.post(
             HF_ASR_URL,
             headers=headers,
+            params=params,
             data=audio_bytes,
             timeout=35
         )
@@ -218,7 +227,7 @@ def index():
           isRecording = true;
           micBtn.classList.add("recording");
           status.textContent = "Recording... Tap again to finish";
-          logs.textContent = "സംസാരിക്കുക (Listening in high-fidelity WAV)...";
+          logs.textContent = "സംസാരിക്കുക (Listening in Malayalam)...";
         } catch (e) {
           diag.textContent = "Mic error: " + e.message;
         }
@@ -226,7 +235,7 @@ def index():
         isRecording = false;
         micBtn.classList.remove("recording");
         status.textContent = "Transcribing Malayalam audio...";
-        logs.textContent = "Sending WAV directly to Whisper AI...";
+        logs.textContent = "Processing speech...";
 
         const wavBlob = await stopWavRecording();
         const formData = new FormData();
@@ -243,14 +252,8 @@ def index():
             diag.textContent = data.error_msg;
           }
 
-          if (!data.transcription) {
-            status.textContent = "No speech detected. Tap to retry.";
-            logs.textContent = "Audio received, but no Malayalam text was returned. Check diagnostic message below.";
-            return;
-          }
-
           let logHtml = 
-            "<span class='label'>🗣️ Malayalam Transcription:</span>\\n\\"" + data.transcription + "\\"\\n\\n" +
+            "<span class='label'>🗣️ Malayalam Transcription:</span>\\n\\"" + (data.transcription || "(none)") + "\\"\\n\\n" +
             "<span class='label'>🧠 Triggered Emotion:</span> " + data.label;
 
           if (data.stream_url) {
@@ -258,9 +261,6 @@ def index():
             player.src = data.stream_url + "?t=" + Date.now();
             player.style.display = "block";
             player.play().catch(e => console.warn(e));
-          } else {
-            player.pause();
-            player.style.display = "none";
           }
 
           logs.innerHTML = logHtml;
@@ -293,14 +293,14 @@ async def process_audio(audio_file: UploadFile = File(...)):
     print(f"\n[ASR RESULT]: '{transcription}' | Err: {error_msg}")
 
     matched_tag = classify_text(transcription) if transcription else "neutral"
-    clip = VOICE_CATALOG.get(matched_tag, None)
+    clip = VOICE_CATALOG.get(matched_tag, "clip_happy.mp3")
 
     return {
         "transcription": transcription,
         "error_msg": error_msg,
         "label": LABEL_DETAILS.get(matched_tag, LABEL_DETAILS["neutral"]),
         "clip_name": clip,
-        "stream_url": f"/cdn/audio/{clip}" if clip else None
+        "stream_url": f"/cdn/audio/{clip}"
     }
 
 if __name__ == "__main__":
