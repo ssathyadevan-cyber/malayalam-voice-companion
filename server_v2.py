@@ -4,7 +4,7 @@ from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="Voice Companion V4 - Stable Mobile")
+app = FastAPI(title="Voice Companion Mobile - Permanent Fix")
 
 app.add_middleware(
     CORSMiddleware,
@@ -99,40 +99,35 @@ def index():
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Voice Companion V4 (ml-IN)</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Malayalam Voice Companion</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #080e1e; color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 16px; box-sizing: border-box; }
-    .card { background: #131b2e; border: 1px solid #1e293b; border-radius: 24px; padding: 1.8rem; max-width: 440px; width: 100%; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.6); }
-    h2 { color: #38bdf8; margin: 0 0 6px 0; }
-    .tag-badge { background: #0369a1; color: #e0f2fe; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: bold; letter-spacing: 0.5px; display: inline-block; margin-bottom: 15px; }
-    .mic-btn { width: 85px; height: 85px; border-radius: 50%; background: #0284c7; color: white; border: none; font-size: 34px; cursor: pointer; margin: 10px 0; transition: all 0.2s; box-shadow: 0 0 20px rgba(2, 132, 199, 0.4); outline: none; }
-    .mic-btn.recording { background: #ef4444; box-shadow: 0 0 25px rgba(239, 68, 68, 0.7); animation: pulse 1.5s infinite; }
-    @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.06); } 100% { transform: scale(1); } }
-    .box { background: #060a14; border-radius: 12px; padding: 14px; font-size: 13.5px; text-align: left; margin-top: 15px; border: 1px solid #1e293b; min-height: 100px; white-space: pre-wrap; word-break: break-word; }
-    .label { color: #38bdf8; font-weight: bold; font-size: 12px; }
-    audio { width: 100%; margin-top: 15px; }
-    .manual-row { margin-top: 14px; display: flex; gap: 8px; }
-    .manual-input { flex: 1; padding: 10px 14px; border-radius: 10px; border: 1px solid #334155; background: #0b1120; color: #fff; font-size: 14px; outline: none; }
-    .manual-btn { padding: 10px 16px; border-radius: 10px; border: none; background: #0284c7; color: #fff; font-weight: bold; cursor: pointer; font-size: 13px; }
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #070d19; color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
+    .card { background: #0f172a; border: 1px solid #1e293b; border-radius: 28px; padding: 2.2rem 1.8rem; max-width: 420px; width: 100%; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7); }
+    h2 { color: #38bdf8; margin: 0 0 8px 0; font-size: 24px; font-weight: 700; }
+    .tag-badge { background: #0284c7; color: #f0f9ff; padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; display: inline-block; margin-bottom: 24px; }
+    .mic-btn { width: 96px; height: 96px; border-radius: 50%; background: #0284c7; color: white; border: none; font-size: 40px; cursor: pointer; margin: 15px auto; display: flex; align-items: center; justify-content: center; transition: transform 0.15s ease, background-color 0.2s; box-shadow: 0 10px 25px rgba(2, 132, 199, 0.4); outline: none; -webkit-tap-highlight-color: transparent; }
+    .mic-btn:active { transform: scale(0.94); }
+    .mic-btn.recording { background: #ef4444; box-shadow: 0 0 30px rgba(239, 68, 68, 0.8); animation: pulse 1.4s infinite; }
+    @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.08); } 100% { transform: scale(1); } }
+    #status { font-size: 15px; font-weight: 600; color: #94a3b8; margin-top: 10px; min-height: 22px; }
+    .box { background: #030712; border-radius: 16px; padding: 16px; font-size: 14px; line-height: 1.6; text-align: left; margin-top: 24px; border: 1px solid #1e293b; min-height: 130px; white-space: pre-wrap; word-break: break-word; color: #e2e8f0; }
+    .label { color: #38bdf8; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    audio { width: 100%; margin-top: 18px; border-radius: 8px; }
   </style>
 </head>
 <body>
   <div class="card">
     <h2>Malayalam Companion</h2>
-    <div class="tag-badge">MOBILE-V4 RESILIENT</div>
+    <div class="tag-badge">MOBILE FINAL ENGINE</div>
     
     <div>
       <button id="micBtn" class="mic-btn">🎙️</button>
-      <div id="status" style="font-size: 14px; font-weight: 600; color: #cbd5e1;">Tap to Start Speaking</div>
+      <div id="status">Tap microphone to speak</div>
     </div>
 
-    <div class="manual-row">
-      <input type="text" id="manualText" class="manual-input" placeholder="Or type Malayalam keyword..." />
-      <button id="sendBtn" class="manual-btn">Test</button>
-    </div>
-
-    <div class="box" id="logs">Ready. Tap microphone to speak, or type a word to test.</div>
+    <div class="box" id="logs">Ready. Tap the microphone, speak in Malayalam, and tap again when finished.</div>
     <audio id="audioPlayer" controls style="display:none;"></audio>
   </div>
 
@@ -141,17 +136,20 @@ def index():
     const status = document.getElementById("status");
     const logs = document.getElementById("logs");
     const player = document.getElementById("audioPlayer");
-    const manualText = document.getElementById("manualText");
-    const sendBtn = document.getElementById("sendBtn");
 
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
     let rec = null;
     let isRecording = false;
-    let capturedSegments = [];
+
+    // Strict deduplication trackers
+    let finalTranscripts = [];
+    let currentInterim = "";
 
     if (!SpeechRec) {
-      logs.textContent = "Speech recognition is not supported natively in this browser view. You can type words below to test directly.";
-      micBtn.style.opacity = "0.5";
+      status.textContent = "Speech recognition unsupported";
+      logs.textContent = "Your current browser does not support native speech recognition. Please open directly in Google Chrome for Android.";
+      micBtn.style.opacity = "0.3";
+      micBtn.disabled = true;
     } else {
       rec = new SpeechRec();
       rec.lang = "ml-IN";
@@ -160,34 +158,43 @@ def index():
 
       rec.onstart = () => {
         isRecording = true;
-        capturedSegments = [];
         micBtn.classList.add("recording");
-        status.textContent = "Listening... Tap mic again to Finish";
-        logs.textContent = "സംസാരിക്കുക (Speak now)...";
+        status.textContent = "Listening... Tap to finish";
+        if (finalTranscripts.length === 0) {
+          logs.textContent = "സംസാരിക്കുക (Listening)...";
+        }
       };
 
       rec.onresult = (e) => {
-        // Clean array deduplication based on result indices
-        let transcript = "";
-        for (let i = 0; i < e.results.length; ++i) {
-          transcript += e.results[i][0].transcript + " ";
+        currentInterim = "";
+        for (let i = e.resultIndex; i < e.results.length; ++i) {
+          const part = e.results[i][0].transcript.trim();
+          if (e.results[i].isFinal) {
+            if (part.length > 0 && !finalTranscripts.includes(part)) {
+              finalTranscripts.push(part);
+            }
+          } else {
+            currentInterim = part;
+          }
         }
-        transcript = transcript.trim();
-        if (transcript) {
-          logs.textContent = transcript;
+
+        const combined = [...finalTranscripts, currentInterim].filter(Boolean).join(" ");
+        if (combined.trim().length > 0) {
+          logs.textContent = combined;
         }
       };
 
       rec.onerror = (e) => {
         console.warn("Speech API error:", e.error);
         if (e.error === "not-allowed") {
-          status.textContent = "Mic access blocked. Check permissions.";
+          status.textContent = "Mic permission denied in settings";
+        } else if (e.error !== "no-speech") {
+          status.textContent = "Error: " + e.error;
         }
       };
 
       rec.onend = () => {
         if (isRecording) {
-          // If stopped involuntarily by mobile OS while still intended to record, restart
           try {
             rec.start();
           } catch(err) {}
@@ -196,82 +203,65 @@ def index():
         }
       };
 
-      async function triggerClassification(textToSubmit) {
-        if (!textToSubmit) return;
-        status.textContent = "Analyzing emotion...";
+      async function finishAndClassify() {
+        isRecording = false;
+        try { rec.stop(); } catch(e) {}
+        micBtn.classList.remove("recording");
+        status.textContent = "Analyzing...";
+
+        const fullSentence = [...finalTranscripts, currentInterim].filter(Boolean).join(" ").trim();
         
+        if (!fullSentence || fullSentence === "സംസാരിക്കുക (Listening)...") {
+          status.textContent = "No speech detected. Tap to retry.";
+          return;
+        }
+
         try {
           const res = await fetch("/api/classify", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: textToSubmit })
+            body: JSON.stringify({ text: fullSentence })
           });
           const data = await res.json();
 
-          let logText = 
-            "<span class='label'>🗣️ Malayalam Input:</span>\\n\\"" + data.transcription + "\\"\\n\\n" +
+          let logHtml = 
+            "<span class='label'>🗣️ Malayalam Transcription:</span>\\n\\"" + data.transcription + "\\"\\n\\n" +
             "<span class='label'>🧠 Triggered Emotion:</span> " + data.label;
 
           if (data.stream_url) {
-            logText += "\\n<span class='label'>🔊 Playing Asset:</span> " + data.clip_name;
+            logHtml += "\\n<span class='label'>🔊 Audio Response:</span> " + data.clip_name;
             player.src = data.stream_url + "?t=" + Date.now();
             player.style.display = "block";
-            player.play().catch(err => {
-              console.warn("Autoplay notice:", err);
-            });
+            player.play().catch(err => console.warn("Autoplay notice:", err));
           } else {
             player.pause();
             player.style.display = "none";
           }
 
-          logs.innerHTML = logText;
+          logs.innerHTML = logHtml;
           status.textContent = data.label;
-        } catch (err) {
-          logs.textContent = "Error: " + err.message;
-          status.textContent = "Classification error";
+        } catch(err) {
+          logs.textContent = "Classification error: " + err.message;
+          status.textContent = "Server error";
         }
       }
 
       micBtn.onclick = () => {
-        // Audio pre-unlock for mobile browsers
+        // Unlock HTML5 audio immediately within user touch gesture
         player.load();
 
         if (!isRecording) {
+          finalTranscripts = [];
+          currentInterim = "";
           try {
             rec.start();
           } catch(e) {
             console.warn("Start error:", e);
           }
         } else {
-          isRecording = false;
-          try { rec.stop(); } catch(e) {}
-          micBtn.classList.remove("recording");
-          status.textContent = "Stopping...";
-          
-          setTimeout(() => {
-            const raw = logs.textContent.trim();
-            if (raw && !raw.startsWith("Ready.") && !raw.startsWith("സംസാരിക്കുക")) {
-              triggerClassification(raw);
-            } else {
-              status.textContent = "No speech detected. Tap to try again.";
-            }
-          }, 300);
+          finishAndClassify();
         }
       };
-
-      sendBtn.onclick = () => {
-        const text = manualText.value.trim();
-        if (text) {
-          triggerClassification(text);
-          manualText.value = "";
-        }
-      };
-      
-      manualText.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") {
-          sendBtn.click();
-        }
-      });
     }
   </script>
 </body>
@@ -288,11 +278,8 @@ async def get_audio(filename: str):
 @app.post("/api/classify")
 async def handle_classify(payload: TextPayload):
     text = payload.text.strip()
-    print(f"\n[MALAYALAM INPUT]: '{text}'")
-
     matched_tag = classify_text(text)
     clip = VOICE_CATALOG.get(matched_tag, None)
-    print(f"[DECISION]: Tag='{matched_tag}' -> Clip='{clip}'\n")
 
     return {
         "transcription": text,
