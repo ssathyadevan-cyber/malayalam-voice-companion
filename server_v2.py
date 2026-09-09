@@ -1,11 +1,10 @@
 import os
-import json
 import requests
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="Voice Companion - Fast Malayalam Engine")
+app = FastAPI(title="Voice Companion - Whisper Turbo Engine")
 
 app.add_middleware(
     CORSMiddleware,
@@ -17,8 +16,8 @@ app.add_middleware(
 
 HF_API_TOKEN = os.environ.get("HF_API_TOKEN", "").strip()
 
-# Switch to standard whisper endpoint configured with explicit Malayalam decoding
-HF_ASR_URL = "https://router.huggingface.co/hf-inference/models/openai/whisper-small"
+# Supported low-latency serverless model
+HF_ASR_URL = "https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3-turbo"
 
 VOICE_CATALOG = {
     "anger": "clip_anger.mp3",
@@ -43,14 +42,30 @@ LABEL_DETAILS = {
 }
 
 DIRECT_MAP = {
-    "anger": ["ദേഷ്യം", "ദേഷ്യ", "ദേഷ്യമാണ്", "കോപം", "വെറുപ്പ്", "കലിപ്പ്", "angry", "mad"],
-    "anxiety": ["പേടി", "പേടിയാണ്", "ടെൻഷൻ", "ഭയം", "പരിഭ്രാന്തി", "panic", "fear"],
-    "loneliness": ["ഒറ്റ", "ഒറ്റപ്പെടൽ", "ഒറ്റയ്ക്കാണ്", "ആരുമില്ല", "തനിച്ചാണ്", "lonely", "alone"],
-    "sadness": ["സങ്കടം", "വിഷമം", "കരച്ചിൽ", "വേദന", "നിരാശ", "sad", "cry"],
-    "happy": ["സന്തോഷം", "ഹാപ്പി", "ചിരി", "അടിപൊളി", "സൂപ്പർ", "happy", "joy"],
-    "confused": ["ആശയക്കുഴപ്പം", "മനസ്സിലാകുന്നില്ല", "confused", "lost"],
-    "crisis": ["മരിക്കണം", "ജീവിതം മടുത്തു", "ആത്മഹത്യ", "suicide"],
-    "neutral": ["നമസ്കാരം", "ഹലോ", "ഹായ്", "hello", "hi"]
+    "anger": [
+        "ദേഷ്യം", "ദേഷ്യ", "ദേഷ്യമാണ്", "കോപം", "വെറുപ്പ്", "കലിപ്പ്", "angry", "mad"
+    ],
+    "anxiety": [
+        "പേടി", "പേടിയാണ്", "ടെൻഷൻ", "ഭയം", "പരിഭ്രാന്തി", "ശ്വാസം", "panic", "fear"
+    ],
+    "loneliness": [
+        "ഒറ്റ", "ഒറ്റപ്പെടൽ", "ഒറ്റയ്ക്കാണ്", "ആരുമില്ല", "തനിച്ചാണ്", "തനിയെ", "lonely", "alone"
+    ],
+    "sadness": [
+        "സങ്കടം", "സങ്കട", "സങ്കടമാണ്", "വിഷമം", "വിഷമമാണ്", "കരച്ചിൽ", "കരയുന്നു", "വേദന", "നിരാശ", "sad", "cry"
+    ],
+    "happy": [
+        "സന്തോഷം", "സന്തോഷ", "സന്തോഷമാണ്", "സന്തോഷമുണ്ട്", "ഹാപ്പി", "ചിരി", "നല്ല", "അടിപൊളി", "സൂപ്പർ", "happy", "joy"
+    ],
+    "confused": [
+        "ആശയക്കുഴപ്പം", "മനസ്സിലാകുന്നില്ല", "മനസിലാകുന്നില്ല", "എന്ത് ചെയ്യണം", "confused", "lost"
+    ],
+    "crisis": [
+        "മരിക്കണം", "ജീവിതം മടുത്തു", "ആത്മഹത്യ", "suicide"
+    ],
+    "neutral": [
+        "നമസ്കാരം", "ഹലോ", "ഹായ്", "hello", "hi"
+    ]
 }
 
 def classify_text(text: str) -> str:
@@ -65,7 +80,7 @@ def classify_text(text: str) -> str:
 def query_hf_asr(audio_bytes: bytes):
     token = os.environ.get("HF_API_TOKEN", "").strip()
     if not token:
-        return "", "Error: HF_API_TOKEN is missing in Render settings."
+        return "", "Error: HF_API_TOKEN missing in Render Environment."
 
     headers = {
         "Authorization": f"Bearer {token}",
@@ -78,14 +93,14 @@ def query_hf_asr(audio_bytes: bytes):
             HF_ASR_URL,
             headers=headers,
             data=audio_bytes,
-            timeout=15
+            timeout=25
         )
 
         if response.status_code == 503:
-            return "", "Model loading, please retry in 10s."
+            return "", "Model is warming up. Please tap mic and try again in 10 seconds."
 
         if response.status_code != 200:
-            return "", f"HF Status {response.status_code}: {response.text[:120]}"
+            return "", f"HF Status {response.status_code}: {response.text[:140]}"
 
         res_json = response.json()
         if isinstance(res_json, dict):
@@ -124,14 +139,14 @@ def index():
 <body>
   <div class="card">
     <h2>Malayalam Companion</h2>
-    <div class="tag-badge">LOW-LATENCY MALAYALAM ASR</div>
+    <div class="tag-badge">WHISPER TURBO ASR</div>
     
     <div>
       <button id="micBtn" class="mic-btn">🎙️</button>
       <div id="status">Tap mic to speak</div>
     </div>
 
-    <div class="box" id="logs">Ready. Speak clearly in Malayalam.</div>
+    <div class="box" id="logs">Ready. Tap mic, speak your Malayalam sentence clearly, and tap again when done.</div>
     <div id="diag" class="diag"></div>
     <audio id="audioPlayer" controls style="display:none;"></audio>
   </div>
@@ -220,16 +235,16 @@ def index():
           await startWavRecording();
           isRecording = true;
           micBtn.classList.add("recording");
-          status.textContent = "Listening... Tap to finish";
-          logs.textContent = "സംസാരിക്കുക (Recording)...";
+          status.textContent = "Listening... Tap to stop";
+          logs.textContent = "സംസാരിക്കുക (Speaking)...";
         } catch (e) {
-          diag.textContent = "Mic error: " + e.message;
+          diag.textContent = "Mic access error: " + e.message;
         }
       } else {
         isRecording = false;
         micBtn.classList.remove("recording");
-        status.textContent = "Transcribing...";
-        logs.textContent = "Processing speech...";
+        status.textContent = "Analyzing Malayalam speech...";
+        logs.textContent = "Transcribing audio...";
 
         const wavBlob = await stopWavRecording();
         const formData = new FormData();
@@ -260,8 +275,8 @@ def index():
           logs.innerHTML = logHtml;
           status.textContent = data.label;
         } catch (err) {
-          diag.textContent = "Upload failed: " + err.message;
-          status.textContent = "Server communication failed";
+          diag.textContent = "Upload error: " + err.message;
+          status.textContent = "Request failed";
         }
       }
     };
@@ -284,7 +299,7 @@ async def process_audio(audio_file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Empty audio payload")
 
     transcription, error_msg = query_hf_asr(audio_bytes)
-    print(f"\n[ASR RESULT]: '{transcription}' | Err: {error_msg}")
+    print(f"\n[TRANSCRIPT]: '{transcription}' | Err: {error_msg}")
 
     matched_tag = classify_text(transcription) if transcription else "neutral"
     clip = VOICE_CATALOG.get(matched_tag, "clip_happy.mp3")
