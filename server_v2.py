@@ -1,5 +1,4 @@
 import os
-import io
 import requests
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, FileResponse
@@ -15,9 +14,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-HF_API_TOKEN = os.environ.get("HF_API_TOKEN", "")
-HF_ASR_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3"
-HF_HEADERS = {"Authorization": f"Bearer {HF_API_TOKEN}"} if HF_API_TOKEN else {}
+HF_API_TOKEN = os.environ.get("HF_API_TOKEN", "").strip()
+# Updated to Hugging Face's official Inference Router domain
+HF_ASR_URL = "https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3"
 
 VOICE_CATALOG = {
     "anger": "clip_anger.mp3",
@@ -95,24 +94,32 @@ def classify_text(text: str) -> str:
                 return emotion
     return "neutral"
 
-def query_hf_asr(audio_bytes: bytes) -> str:
-    token = os.environ.get("HF_API_TOKEN", "")
-    headers = {"Authorization": f"Bearer {token}"} if token else {}
+def query_hf_asr(audio_bytes: bytes, mime_type: str = "audio/webm"):
+    token = os.environ.get("HF_API_TOKEN", "").strip()
+    if not token:
+        print("[HF ASR Error]: HF_API_TOKEN is empty in environment variables.")
+        return ""
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": mime_type
+    }
+
     try:
         response = requests.post(
             HF_ASR_URL,
             headers=headers,
             data=audio_bytes,
-            params={"generate_kwargs": {"language": "malayalam", "task": "transcribe"}},
-            timeout=25
+            timeout=30
         )
         if response.status_code != 200:
-            print(f"[HF ASR Error] Status {response.status_code}: {response.text}")
+            print(f"[HF ASR Error] Status {response.status_code}: {response.text[:200]}")
             return ""
+
         res_json = response.json()
         return res_json.get("text", "").strip()
     except Exception as e:
-        print(f"[HF ASR Request Failed]: {e}")
+        print(f"[HF ASR Exception]: {e}")
         return ""
 
 @app.get("/", response_class=HTMLResponse)
@@ -129,7 +136,7 @@ def index():
     .card { background: #0f172a; border: 1px solid #1e293b; border-radius: 28px; padding: 2.2rem 1.8rem; max-width: 420px; width: 100%; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7); }
     h2 { color: #38bdf8; margin: 0 0 8px 0; font-size: 24px; font-weight: 700; }
     .tag-badge { background: #0284c7; color: #f0f9ff; padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; display: inline-block; margin-bottom: 24px; }
-    .mic-btn { width: 96px; height: 96px; border-radius: 50%; background: #0284c7; color: white; border: none; font-size: 40px; cursor: pointer; margin: 15px auto; display: flex; align-items: center; justify-content: center; transition: transform 0.15s ease, background-color 0.2s; box-shadow: 0 10px 25px rgba(2, 132, 199, 0.4); outline: none; -webkit-tap-highlight-color: transparent; }
+    .mic-btn { width: 96px; height: 96px; border-radius: 50%; background: #0284c7; color: white; border: none; font-size: 40px; cursor: pointer; margin: 15px auto; display: flex; align-items: center; justify-content: center; transition: transform 0.15s ease; box-shadow: 0 10px 25px rgba(2, 132, 199, 0.4); outline: none; -webkit-tap-highlight-color: transparent; }
     .mic-btn:active { transform: scale(0.94); }
     .mic-btn.recording { background: #ef4444; box-shadow: 0 0 30px rgba(239, 68, 68, 0.8); animation: pulse 1.4s infinite; }
     @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.08); } 100% { transform: scale(1); } }
@@ -149,7 +156,7 @@ def index():
       <div id="status">Tap mic to speak</div>
     </div>
 
-    <div class="box" id="logs">Ready. Tap the microphone once to start recording, speak in Malayalam, and tap again when finished.</div>
+    <div class="box" id="logs">Ready. Tap the microphone once to record, speak your Malayalam sentence, and tap again when finished.</div>
     <audio id="audioPlayer" controls style="display:none;"></audio>
   </div>
 
@@ -166,24 +173,34 @@ def index():
     async function setupRecorder() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
+        
+        let mime = "audio/webm";
+        if (!MediaRecorder.isTypeSupported("audio/webm")) {
+          if (MediaRecorder.isTypeSupported("audio/mp4")) {
+            mime = "audio/mp4";
+          } else {
+            mime = "";
+          }
+        }
+        
+        mediaRecorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
 
         mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            audioChunks.push(event.data);
-          }
+          if (event.data.size > 0) audioChunks.push(event.data);
         };
 
         mediaRecorder.onstop = async () => {
           micBtn.classList.remove("recording");
-          status.textContent = "Processing Malayalam speech...";
+          status.textContent = "Processing speech...";
           logs.textContent = "Uploading audio to AI model for transcription...";
 
-          const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || "audio/webm" });
+          const chosenType = mediaRecorder.mimeType || "audio/webm";
+          const audioBlob = new Blob(audioChunks, { type: chosenType });
           audioChunks = [];
 
           const formData = new FormData();
           formData.append("audio_file", audioBlob, "recording.webm");
+          formData.append("mime_type", chosenType);
 
           try {
             const res = await fetch("/api/process-audio", {
@@ -206,7 +223,7 @@ def index():
               logHtml += "\\n<span class='label'>🔊 Audio Response:</span> " + data.clip_name;
               player.src = data.stream_url + "?t=" + Date.now();
               player.style.display = "block";
-              player.play().catch(err => console.warn("Autoplay notice:", err));
+              player.play().catch(err => console.warn(err));
             } else {
               player.pause();
               player.style.display = "none";
@@ -259,12 +276,15 @@ async def get_audio(filename: str):
     return FileResponse(path, media_type="audio/mpeg")
 
 @app.post("/api/process-audio")
-async def process_audio(audio_file: UploadFile = File(...)):
+async def process_audio(
+    audio_file: UploadFile = File(...),
+    mime_type: str = "audio/webm"
+):
     audio_bytes = await audio_file.read()
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="Empty audio payload")
 
-    transcription = query_hf_asr(audio_bytes)
+    transcription = query_hf_asr(audio_bytes, mime_type=mime_type)
     print(f"\n[ASR TRANSCRIPT]: '{transcription}'")
 
     matched_tag = classify_text(transcription) if transcription else "neutral"
