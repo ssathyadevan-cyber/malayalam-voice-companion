@@ -1,10 +1,11 @@
 import os
-from fastapi import FastAPI, HTTPException
+import io
+import requests
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 
-app = FastAPI(title="Voice Companion Mobile - Permanent Fix")
+app = FastAPI(title="Voice Companion - HuggingFace Audio Engine")
 
 app.add_middleware(
     CORSMiddleware,
@@ -13,6 +14,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+HF_API_TOKEN = os.environ.get("HF_API_TOKEN", "")
+HF_ASR_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3"
+HF_HEADERS = {"Authorization": f"Bearer {HF_API_TOKEN}"} if HF_API_TOKEN else {}
 
 VOICE_CATALOG = {
     "anger": "clip_anger.mp3",
@@ -81,9 +86,6 @@ DIRECT_MAP = {
     ]
 }
 
-class TextPayload(BaseModel):
-    text: str
-
 def classify_text(text: str) -> str:
     clean = text.lower().replace("്", "").replace("ാ", "").replace("ി", "")
     for emotion, patterns in DIRECT_MAP.items():
@@ -92,6 +94,26 @@ def classify_text(text: str) -> str:
             if pat_clean in clean or pat in text.lower():
                 return emotion
     return "neutral"
+
+def query_hf_asr(audio_bytes: bytes) -> str:
+    token = os.environ.get("HF_API_TOKEN", "")
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    try:
+        response = requests.post(
+            HF_ASR_URL,
+            headers=headers,
+            data=audio_bytes,
+            params={"generate_kwargs": {"language": "malayalam", "task": "transcribe"}},
+            timeout=25
+        )
+        if response.status_code != 200:
+            print(f"[HF ASR Error] Status {response.status_code}: {response.text}")
+            return ""
+        res_json = response.json()
+        return res_json.get("text", "").strip()
+    except Exception as e:
+        print(f"[HF ASR Request Failed]: {e}")
+        return ""
 
 @app.get("/", response_class=HTMLResponse)
 def index():
@@ -120,14 +142,14 @@ def index():
 <body>
   <div class="card">
     <h2>Malayalam Companion</h2>
-    <div class="tag-badge">MOBILE FINAL ENGINE</div>
+    <div class="tag-badge">SERVER-ASR AUDIO PIPELINE</div>
     
     <div>
       <button id="micBtn" class="mic-btn">🎙️</button>
-      <div id="status">Tap microphone to speak</div>
+      <div id="status">Tap mic to speak</div>
     </div>
 
-    <div class="box" id="logs">Ready. Tap the microphone, speak in Malayalam, and tap again when finished.</div>
+    <div class="box" id="logs">Ready. Tap the microphone once to start recording, speak in Malayalam, and tap again when finished.</div>
     <audio id="audioPlayer" controls style="display:none;"></audio>
   </div>
 
@@ -137,132 +159,93 @@ def index():
     const logs = document.getElementById("logs");
     const player = document.getElementById("audioPlayer");
 
-    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let rec = null;
+    let mediaRecorder = null;
+    let audioChunks = [];
     let isRecording = false;
 
-    // Strict deduplication trackers
-    let finalTranscripts = [];
-    let currentInterim = "";
+    async function setupRecorder() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
 
-    if (!SpeechRec) {
-      status.textContent = "Speech recognition unsupported";
-      logs.textContent = "Your current browser does not support native speech recognition. Please open directly in Google Chrome for Android.";
-      micBtn.style.opacity = "0.3";
-      micBtn.disabled = true;
-    } else {
-      rec = new SpeechRec();
-      rec.lang = "ml-IN";
-      rec.continuous = true;
-      rec.interimResults = true;
-
-      rec.onstart = () => {
-        isRecording = true;
-        micBtn.classList.add("recording");
-        status.textContent = "Listening... Tap to finish";
-        if (finalTranscripts.length === 0) {
-          logs.textContent = "സംസാരിക്കുക (Listening)...";
-        }
-      };
-
-      rec.onresult = (e) => {
-        currentInterim = "";
-        for (let i = e.resultIndex; i < e.results.length; ++i) {
-          const part = e.results[i][0].transcript.trim();
-          if (e.results[i].isFinal) {
-            if (part.length > 0 && !finalTranscripts.includes(part)) {
-              finalTranscripts.push(part);
-            }
-          } else {
-            currentInterim = part;
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunks.push(event.data);
           }
-        }
+        };
 
-        const combined = [...finalTranscripts, currentInterim].filter(Boolean).join(" ");
-        if (combined.trim().length > 0) {
-          logs.textContent = combined;
-        }
-      };
-
-      rec.onerror = (e) => {
-        console.warn("Speech API error:", e.error);
-        if (e.error === "not-allowed") {
-          status.textContent = "Mic permission denied in settings";
-        } else if (e.error !== "no-speech") {
-          status.textContent = "Error: " + e.error;
-        }
-      };
-
-      rec.onend = () => {
-        if (isRecording) {
-          try {
-            rec.start();
-          } catch(err) {}
-        } else {
+        mediaRecorder.onstop = async () => {
           micBtn.classList.remove("recording");
-        }
-      };
+          status.textContent = "Processing Malayalam speech...";
+          logs.textContent = "Uploading audio to AI model for transcription...";
 
-      async function finishAndClassify() {
-        isRecording = false;
-        try { rec.stop(); } catch(e) {}
-        micBtn.classList.remove("recording");
-        status.textContent = "Analyzing...";
+          const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || "audio/webm" });
+          audioChunks = [];
 
-        const fullSentence = [...finalTranscripts, currentInterim].filter(Boolean).join(" ").trim();
-        
-        if (!fullSentence || fullSentence === "സംസാരിക്കുക (Listening)...") {
-          status.textContent = "No speech detected. Tap to retry.";
-          return;
-        }
+          const formData = new FormData();
+          formData.append("audio_file", audioBlob, "recording.webm");
 
-        try {
-          const res = await fetch("/api/classify", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: fullSentence })
-          });
-          const data = await res.json();
+          try {
+            const res = await fetch("/api/process-audio", {
+              method: "POST",
+              body: formData
+            });
 
-          let logHtml = 
-            "<span class='label'>🗣️ Malayalam Transcription:</span>\\n\\"" + data.transcription + "\\"\\n\\n" +
-            "<span class='label'>🧠 Triggered Emotion:</span> " + data.label;
+            const data = await res.json();
+            if (!data.transcription) {
+              status.textContent = "Could not detect clear speech. Tap to retry.";
+              logs.textContent = "No Malayalam words recognized. Please speak clearly closer to the microphone.";
+              return;
+            }
 
-          if (data.stream_url) {
-            logHtml += "\\n<span class='label'>🔊 Audio Response:</span> " + data.clip_name;
-            player.src = data.stream_url + "?t=" + Date.now();
-            player.style.display = "block";
-            player.play().catch(err => console.warn("Autoplay notice:", err));
-          } else {
-            player.pause();
-            player.style.display = "none";
+            let logHtml = 
+              "<span class='label'>🗣️ Malayalam Transcription:</span>\\n\\"" + data.transcription + "\\"\\n\\n" +
+              "<span class='label'>🧠 Triggered Emotion:</span> " + data.label;
+
+            if (data.stream_url) {
+              logHtml += "\\n<span class='label'>🔊 Audio Response:</span> " + data.clip_name;
+              player.src = data.stream_url + "?t=" + Date.now();
+              player.style.display = "block";
+              player.play().catch(err => console.warn("Autoplay notice:", err));
+            } else {
+              player.pause();
+              player.style.display = "none";
+            }
+
+            logs.innerHTML = logHtml;
+            status.textContent = data.label;
+          } catch (err) {
+            logs.textContent = "Error processing audio: " + err.message;
+            status.textContent = "Server communication error";
           }
+        };
+      } catch (err) {
+        status.textContent = "Microphone access denied";
+        logs.textContent = "Please grant microphone permissions to use voice interaction.";
+      }
+    }
 
-          logs.innerHTML = logHtml;
-          status.textContent = data.label;
-        } catch(err) {
-          logs.textContent = "Classification error: " + err.message;
-          status.textContent = "Server error";
-        }
+    micBtn.onclick = async () => {
+      player.load();
+
+      if (!mediaRecorder) {
+        await setupRecorder();
       }
 
-      micBtn.onclick = () => {
-        // Unlock HTML5 audio immediately within user touch gesture
-        player.load();
+      if (!mediaRecorder) return;
 
-        if (!isRecording) {
-          finalTranscripts = [];
-          currentInterim = "";
-          try {
-            rec.start();
-          } catch(e) {
-            console.warn("Start error:", e);
-          }
-        } else {
-          finishAndClassify();
-        }
-      };
-    }
+      if (!isRecording) {
+        audioChunks = [];
+        mediaRecorder.start();
+        isRecording = true;
+        micBtn.classList.add("recording");
+        status.textContent = "Recording... Tap again to finish";
+        logs.textContent = "സംസാരിക്കുക (Speaking)...";
+      } else {
+        isRecording = false;
+        mediaRecorder.stop();
+      }
+    };
   </script>
 </body>
 </html>
@@ -275,14 +258,21 @@ async def get_audio(filename: str):
         raise HTTPException(status_code=404, detail="Audio file not found")
     return FileResponse(path, media_type="audio/mpeg")
 
-@app.post("/api/classify")
-async def handle_classify(payload: TextPayload):
-    text = payload.text.strip()
-    matched_tag = classify_text(text)
+@app.post("/api/process-audio")
+async def process_audio(audio_file: UploadFile = File(...)):
+    audio_bytes = await audio_file.read()
+    if not audio_bytes:
+        raise HTTPException(status_code=400, detail="Empty audio payload")
+
+    transcription = query_hf_asr(audio_bytes)
+    print(f"\n[ASR TRANSCRIPT]: '{transcription}'")
+
+    matched_tag = classify_text(transcription) if transcription else "neutral"
     clip = VOICE_CATALOG.get(matched_tag, None)
+    print(f"[DECISION]: Emotion='{matched_tag}' -> Clip='{clip}'\n")
 
     return {
-        "transcription": text,
+        "transcription": transcription,
         "label": LABEL_DETAILS.get(matched_tag, LABEL_DETAILS["neutral"]),
         "clip_name": clip,
         "stream_url": f"/cdn/audio/{clip}" if clip else None
