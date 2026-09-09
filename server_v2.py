@@ -1,5 +1,4 @@
 import os
-import json
 import requests
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, FileResponse
@@ -41,10 +40,34 @@ LABEL_DETAILS = {
     "crisis": "🚨 CRISIS (ഗുരുതരം)"
 }
 
+EMOTION_KEYWORDS = {
+    "crisis": ["മരിക്കണം", "ജീവിതം മടുത്തു", "ആത്മഹത്യ", "suicide"],
+    "anxiety": [
+        "പേടി", "പേടിയാണ്", "പേടിപ്പിക്കുന്ന", "ഞെട്ടി", "ടെൻഷൻ", "ഭയം",
+        "പരിഭ്രാന്തി", "വിറയ്ക്കുന്നു", "ശ്വാസം", "ഉറങ്ങാൻ പറ്റിയില്ല", "സ്വപ്നം", "nightmare", "panic", "fear"
+    ],
+    "sadness": [
+        "വിഷമം", "വിഷമമാണ്", "വിഷമവും", "സങ്കടം", "സങ്കടമാണ്", "കരച്ചിൽ",
+        "കരയുന്നു", "വേദന", "നിരാശ", "മനസ്സിന് സുഖമില്ല", "തകർന്നു", "sad", "grief"
+    ],
+    "anger": ["ദേഷ്യം", "ദേഷ്യ", "ദേഷ്യമാണ്", "കോപം", "വെറുപ്പ്", "കലിപ്പ്", "angry", "mad"],
+    "loneliness": ["ഒറ്റ", "ഒറ്റപ്പെടൽ", "ഒറ്റയ്ക്കാണ്", "ആരുമില്ല", "തനിച്ചാണ്", "തനിയെ", "lonely", "alone"],
+    "happy": ["സന്തോഷം", "സന്തോഷ", "സന്തോഷമാണ്", "സന്തോഷമുണ്ട്", "ഹാപ്പി", "ചിരി", "നല്ല", "അടിപൊളി", "സൂപ്പർ", "happy", "joy"],
+    "confused": ["ആശയക്കുഴപ്പം", "മനസ്സിലാകുന്നില്ല", "മനസിലാകുന്നില്ല", "എന്ത് ചെയ്യണം", "confused", "lost"]
+}
+
+def fast_local_classify(text: str):
+    clean = text.lower()
+    for emotion, patterns in EMOTION_KEYWORDS.items():
+        for pat in patterns:
+            if pat in clean:
+                return emotion
+    return None
+
 def query_sarvam_asr(audio_bytes: bytes):
     key = os.environ.get("SARVAM_API_KEY", "").strip()
     if not key:
-        return "", "SARVAM_API_KEY is not set in Render Environment settings."
+        return "", "SARVAM_API_KEY missing in environment."
 
     headers = {
         "api-subscription-key": key
@@ -62,14 +85,17 @@ def query_sarvam_asr(audio_bytes: bytes):
         res = requests.post(SARVAM_ASR_URL, headers=headers, files=files, data=data, timeout=15)
         if res.status_code != 200:
             return "", f"Sarvam ASR HTTP {res.status_code}: {res.text[:140]}"
-
-        res_json = res.json()
-        transcript = res_json.get("transcript", "").strip()
-        return transcript, None
+        return res.json().get("transcript", "").strip(), None
     except Exception as e:
         return "", f"ASR connection error: {str(e)}"
 
 def query_sarvam_chat_emotion(transcript: str) -> str:
+    # 1. Fast deterministic check first
+    local_tag = fast_local_classify(transcript)
+    if local_tag:
+        return local_tag
+
+    # 2. Contextual LLM fallback using correct Sarvam model ID
     key = os.environ.get("SARVAM_API_KEY", "").strip()
     if not key or not transcript:
         return "neutral"
@@ -79,35 +105,16 @@ def query_sarvam_chat_emotion(transcript: str) -> str:
         "api-subscription-key": key
     }
 
-    system_prompt = (
-        "You are an empathetic Malayalam emotional classifier. "
-        "Analyze the user's spoken Malayalam text and classify their emotional state into EXACTLY one of these labels:\n"
-        "- anger\n"
-        "- anxiety\n"
-        "- loneliness\n"
-        "- sadness\n"
-        "- happy\n"
-        "- confused\n"
-        "- crisis\n"
-        "- neutral\n\n"
-        "Guidelines:\n"
-        "- 'anxiety': Fear, stress, panic, upcoming exams/interviews, nervous dread.\n"
-        "- 'sadness': Feeling down, crying, heartbreak, loss, exhaustion.\n"
-        "- 'loneliness': Having no one to talk to, isolated, craving connection.\n"
-        "- 'anger': Frustration, irritation, betrayed, rage.\n"
-        "- 'happy': Joy, celebration, relief, exciting news.\n"
-        "- 'confused': Puzzled, indecisive, not knowing what to do.\n"
-        "- 'crisis': Thoughts of self-harm, ending life, utter despair.\n"
-        "- 'neutral': Greetings, casual everyday remarks.\n\n"
-        "Output ONLY the single label word in lowercase. Do not add any punctuation or other words."
+    prompt = (
+        "Classify the emotion of this Malayalam statement into exactly one word from this list: "
+        "[anger, anxiety, loneliness, sadness, happy, confused, crisis, neutral].\n"
+        f"User text: \"{transcript}\"\n"
+        "Return ONLY the single lowercased word."
     )
 
     payload = {
-        "model": "sarvam-2b",
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Text: \"{transcript}\""}
-        ],
+        "model": "sarvam-105b-conversations",
+        "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.1,
         "max_tokens": 10
     }
@@ -115,16 +122,12 @@ def query_sarvam_chat_emotion(transcript: str) -> str:
     try:
         res = requests.post(SARVAM_CHAT_URL, headers=headers, json=payload, timeout=8)
         if res.status_code == 200:
-            res_json = res.json()
-            raw_emotion = res_json["choices"][0]["message"]["content"].strip().lower()
-            # Clean response to ensure exact tag matching
+            content = res.json()["choices"][0]["message"]["content"].strip().lower()
             for tag in VOICE_CATALOG.keys():
-                if tag in raw_emotion:
+                if tag in content:
                     return tag
-        else:
-            print(f"[CHAT API ERROR]: {res.status_code} - {res.text}")
-    except Exception as e:
-        print(f"[CHAT REQUEST EXCEPTION]: {str(e)}")
+    except Exception:
+        pass
 
     return "neutral"
 
@@ -280,7 +283,7 @@ def index():
 
           let logHtml = 
             "<span class='label'>🗣️ Malayalam Transcription:</span>\\n\\"" + (data.transcription || "(none)") + "\\"\\n\\n" +
-            "<span class='label'>🧠 Sarvam Intent Detection:</span> " + data.label;
+            "<span class='label'>🧠 Detected Emotion:</span> " + data.label;
 
           if (data.stream_url) {
             logHtml += "\\n<span class='label'>🔊 Audio Response:</span> " + data.clip_name;
@@ -315,13 +318,11 @@ async def process_audio(audio_file: UploadFile = File(...)):
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="Empty audio payload")
 
-    # Step 1: Speech-to-Text via Sarvam Saaras v3
     transcription, error_msg = query_sarvam_asr(audio_bytes)
     print(f"\n[SARVAM ASR]: '{transcription}' | Err: {error_msg}")
 
-    # Step 2: Contextual Intent & Emotion Detection via Sarvam-2B LLM
     matched_tag = query_sarvam_chat_emotion(transcription) if transcription else "neutral"
-    print(f"[SARVAM CHAT CLASSIFICATION]: {matched_tag}")
+    print(f"[FINAL CLASSIFICATION]: {matched_tag}")
 
     clip = VOICE_CATALOG.get(matched_tag, "clip_happy.mp3")
 
