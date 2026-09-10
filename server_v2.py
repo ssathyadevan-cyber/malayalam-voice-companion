@@ -18,6 +18,7 @@ SARVAM_API_KEY = os.environ.get("SARVAM_API_KEY", "").strip()
 SARVAM_ASR_URL = "https://api.sarvam.ai/speech-to-text"
 SARVAM_CHAT_URL = "https://api.sarvam.ai/v1/chat/completions"
 
+# Map neutral/fallback to empathetic listening (clip_loneliness.mp3) instead of happy celebration
 VOICE_CATALOG = {
     "anger": "clip_anger.mp3",
     "anxiety": "clip_anxiety.mp3",
@@ -27,38 +28,51 @@ VOICE_CATALOG = {
     "craving": "clip_craving.mp3",
     "stigma": "clip_stigma.mp3",
     "crisis": "clip_crisis.mp3",
-    "neutral": "clip_happy.mp3"
+    "neutral": "clip_loneliness.mp3"
 }
 
 LABEL_DETAILS = {
     "anger": "🔥 AGITATION / ANGER (ദേഷ്യം / അസ്വസ്ഥത)",
     "anxiety": "⚠️ WITHDRAWAL / ANXIETY (വിറയൽ / പരിഭ്രാന്തി)",
-    "loneliness": "🫂 ISOLATION (ഏകാന്തത)",
+    "loneliness": "🫂 ISOLATION & ESCAPISM (ഏകാന്തത / മനസ്സിന്റെ ഭാരം)",
     "sadness": "💧 RELAPSE GUILT (സങ്കടം / കുറ്റബോധം)",
     "happy": "✨ RECOVERY PROGRESS (സന്തോഷം / പുരോഗതി)",
     "craving": "⚡ INTENSE CRAVING (തീവ്രമായ കൊതി / ആഗ്രഹം)",
     "stigma": "🛡️ FEAR OF STIGMA / TREATMENT (ചികിത്സാ ഭയം / നാണക്കേട്)",
     "crisis": "🚨 CRISIS INTERVENTION (അടിയന്തിര സഹായം)",
-    "neutral": "🌿 GENERAL SUPPORT (പൊതുവായ പിന്തുണ)"
+    "neutral": "🫂 SUPPORTIVE LISTENING (തുറന്നു സംസാരിക്കാം)"
 }
 
 EMOTION_KEYWORDS = {
-    "crisis": ["മരിക്കണം", "ജീവിതം മടുത്തു", "ആത്മഹത്യ", "suicide", "അവസാനിപ്പിക്കാൻ", "ജീവനൊടുക്കാൻ"],
-    "stigma": ["റീഹാബ്", "നാണക്കേട്", "പോലീസ് കേസ്", "ഡോക്ടറെ കാണാൻ", "മുദ്രകുത്തുമോ", "ജോലി പോകും", "സമൂഹം", "നാട്ടുകാർ"],
-    "craving": ["കൊതി", "ഉപയോഗിക്കാൻ തോന്നുന്നു", "ഇപ്പോൾ തന്നെ വേണം", "പിടിച്ചുനിൽക്കാൻ പറ്റുന്നില്ല", "കൈവിട്ടുപോകും", "craving", "urge"],
+    "crisis": [
+        "മരിക്കണം", "ജീവിതം മടുത്തു", "ആത്മഹത്യ", "suicide", "അവസാനിപ്പിക്കാൻ",
+        "ജീവനൊടുക്കാൻ", "തീർക്കാൻ", "ജീവിക്കാൻ വയ്യ"
+    ],
+    "stigma": [
+        "റീഹാബ്", "നാണക്കേട്", "പോലീസ് കേസ്", "ഡോക്ടറെ കാണാൻ", "മുദ്രകുത്തുമോ",
+        "ജോലി പോകും", "സമൂഹം", "നാട്ടുകാർ", "stigma"
+    ],
+    "craving": [
+        "കൊതി", "ഉപയോഗിക്കാൻ തോന്നുന്നു", "ഇപ്പോൾ തന്നെ വേണം", "പിടിച്ചുനിൽക്കാൻ പറ്റുന്നില്ല",
+        "കൈവിട്ടുപോകും", "craving", "urge"
+    ],
     "anxiety": [
-        "വിറയ്ക്കുന്നു", "വിറയൽ", "സഹിക്കാൻ പറ്റുന്നില്ല", "പേടി", "പേടിയാണ്", "ടെൻഷൻ", 
+        "വിറയ്ക്കുന്നു", "വിറയൽ", "സഹിക്കാൻ പറ്റുന്നില്ല", "പേടി", "പേടിയാണ്", "ടെൻഷൻ",
         "ഉറങ്ങാൻ പറ്റിയില്ല", "നെഞ്ചിടിപ്പ്", "ശ്വാസം മുട്ടൽ", "withdrawal", "panic"
     ],
     "sadness": [
-        "വീണുപോയി", "പഴയ ശീലം", "കുറ്റബോധം", "തോറ്റുപോയി", "തോൽപ്പിച്ചു", "വിഷമം", 
+        "വീണുപോയി", "പഴയ ശീലം", "കുറ്റബോധം", "തോറ്റുപോയി", "തോൽപ്പിച്ചു", "വിഷമം",
         "സങ്കടം", "കരച്ചിൽ", "വേദന", "നിരാശ", "relapse", "sad"
     ],
+    # Added escapist, departure, and isolation triggers
     "loneliness": [
-        "ആരുമില്ല", "ഒറ്റപ്പെട്ടു", "ഒറ്റയ്ക്കാണ്", "ഏകാന്തത", "തനിച്ചാണ്", "തനിയെ", "കൂട്ടില്ല", "alone", "isolated"
+        "എങ്ങോട്ടെങ്കിലും", "പോകുന്നു", "പോവുകയാണ്", "പോവണം", "രക്ഷപ്പെടണം", "ഓടിപ്പോകാൻ",
+        "മാറി നിൽക്കണം", "ആരുമില്ല", "ഒറ്റപ്പെട്ടു", "ഒറ്റയ്ക്കാണ്", "ഏകാന്തത", "തനിച്ചാണ്",
+        "തനിയെ", "കൂട്ടില്ല", "ആരും മനസ്സിലാക്കുന്നില്ല", "alone", "leave", "escape"
     ],
     "anger": ["ദേഷ്യം", "വെറുപ്പ്", "ഉപദേശിക്കാൻ", "വെറുതെ വിട്ടേക്ക്", "കലിപ്പ്", "കോപം", "angry", "mad"],
-    "happy": ["തൊട്ടിട്ടില്ല", "മാറ്റം", "നല്ല ദിവസം", "സന്തോഷം", "ആശ്വാസം", "ജയിച്ചു", "അഭിമാനം", "happy", "clean"]
+    # Keep happy strictly tied to explicit milestones and sobriety celebrations
+    "happy": ["തൊട്ടിട്ടില്ല", "മാറ്റം", "നല്ല ദിവസം", "സന്തോഷം", "സന്തോഷമുണ്ട്", "ആശ്വാസം", "ജയിച്ചു", "അഭിമാനം", "clean"]
 }
 
 def fast_local_classify(text: str):
@@ -91,13 +105,15 @@ def query_sarvam_asr(audio_bytes: bytes):
         return "", f"ASR connection error: {str(e)}"
 
 def query_sarvam_chat_emotion(transcript: str) -> str:
+    # 1. Deterministic instant match
     local_tag = fast_local_classify(transcript)
     if local_tag:
         return local_tag
 
+    # 2. LLM contextual fallback
     key = os.environ.get("SARVAM_API_KEY", "").strip()
     if not key or not transcript:
-        return "neutral"
+        return "loneliness"
 
     headers = {
         "Content-Type": "application/json",
@@ -105,11 +121,14 @@ def query_sarvam_chat_emotion(transcript: str) -> str:
     }
 
     prompt = (
-        "You are an empathetic addiction recovery classifier. "
-        "Classify the user's emotional state from this Malayalam speech into EXACTLY one category: "
-        "[anger, anxiety, loneliness, sadness, happy, craving, stigma, crisis, neutral].\n"
-        f"User text: \"{transcript}\"\n"
-        "Return ONLY the single lowercased word."
+        "You are an empathetic addiction and mental health classifier. "
+        "Analyze the user's spoken Malayalam statement and classify into EXACTLY one category from:\n"
+        "[anger, anxiety, loneliness, sadness, happy, craving, stigma, crisis].\n\n"
+        "Guidelines:\n"
+        "- If user expresses running away, wanting to leave, escape, or feeling overwhelmed/alone (e.g., 'ഞാൻ എങ്ങോട്ടെങ്കിലും പോകുന്നു'), classify as 'loneliness' or 'sadness'. NEVER classify as 'happy'.\n"
+        "- Only classify as 'happy' if they explicitly mention sobriety milestones, relief, or positive improvement.\n\n"
+        f"User statement: \"{transcript}\"\n"
+        "Return ONLY the single lowercased category name."
     )
 
     payload = {
@@ -129,7 +148,7 @@ def query_sarvam_chat_emotion(transcript: str) -> str:
     except Exception:
         pass
 
-    return "neutral"
+    return "loneliness"
 
 @app.get("/", response_class=HTMLResponse)
 def index():
@@ -185,7 +204,6 @@ def index():
     let processor = null;
     let pcmChunks = [];
 
-    // Attempt autoplay immediately on script evaluation
     function tryPlayWelcome() {
       if (initialWelcomePlayed) return;
       player.src = "/cdn/audio/clip_welcome.mp3?t=" + Date.now();
@@ -193,15 +211,13 @@ def index():
       player.play().then(() => {
         initialWelcomePlayed = true;
       }).catch(err => {
-        // Autoplay blocked by browser policy; will play on first click
-        console.log("Autoplay waiting for first gesture:", err.message);
+        console.log("Autoplay gesture required:", err.message);
       });
     }
 
     window.addEventListener("DOMContentLoaded", tryPlayWelcome);
     window.addEventListener("load", tryPlayWelcome);
 
-    // If blocked, any first tap/click anywhere on page immediately triggers it
     document.addEventListener("click", () => {
       if (!initialWelcomePlayed) {
         tryPlayWelcome();
@@ -271,7 +287,6 @@ def index():
     }
 
     micBtn.onclick = async () => {
-      // If the welcome note has not yet played due to autoplay block, play it and don't record yet
       if (!initialWelcomePlayed) {
         tryPlayWelcome();
         return;
@@ -351,15 +366,15 @@ async def process_audio(audio_file: UploadFile = File(...)):
     transcription, error_msg = query_sarvam_asr(audio_bytes)
     print(f"\n[SARVAM ASR]: '{transcription}' | Err: {error_msg}")
 
-    matched_tag = query_sarvam_chat_emotion(transcription) if transcription else "neutral"
+    matched_tag = query_sarvam_chat_emotion(transcription) if transcription else "loneliness"
     print(f"[RECOVERY TAG]: {matched_tag}")
 
-    clip = VOICE_CATALOG.get(matched_tag, "clip_happy.mp3")
+    clip = VOICE_CATALOG.get(matched_tag, "clip_loneliness.mp3")
 
     return {
         "transcription": transcription,
         "error_msg": error_msg,
-        "label": LABEL_DETAILS.get(matched_tag, LABEL_DETAILS["neutral"]),
+        "label": LABEL_DETAILS.get(matched_tag, LABEL_DETAILS["loneliness"]),
         "clip_name": clip,
         "stream_url": f"/cdn/audio/{clip}"
     }
